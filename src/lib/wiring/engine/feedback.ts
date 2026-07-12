@@ -62,10 +62,10 @@ export function polarityCheck(a: TerminalId, b: TerminalId): string | null {
     return "❌ The lamp's other terminal must go to the +24V block, not 0V. The Y output switches the 0V side internally through COM.";
   if ((has("TB24") || has("PSU.24VDC")) && match(/^PB\d\./))
     return "❌ The button must switch 0V into the input, not 24V. Wire the button from the 0V block.";
-  if (has("PSU.24VDC") && (has("PLC.S/S") || match(/^LAMP\d\./)))
-    return "❌ Distribute 24V through the +24V terminal block — the power supply screw would get crowded with multiple wires.";
-  if (has("PSU.0VDC") && (match(/^PB\d\./) || match(/^PLC\.COM\d$/)))
-    return "❌ Distribute 0V through the 0V terminal block — the power supply screw would get crowded with multiple wires.";
+  // if (has("PSU.24VDC") && (has("PLC.S/S") || match(/^LAMP\d\./)))
+  //   return "❌ Distribute 24V through the +24V terminal block — the power supply screw would get crowded with multiple wires.";
+  // if (has("PSU.0VDC") && (match(/^PB\d\./) || match(/^PLC\.COM\d$/)))
+  //   return "❌ Distribute 0V through the 0V terminal block — the power supply screw would get crowded with multiple wires.";
   if (match(/^LAMP\d\.SP\d$/))
     return "❌ That lamp terminal is a spare — it is not connected internally. Use X1/X2.";
   if (na === nb)
@@ -74,7 +74,11 @@ export function polarityCheck(a: TerminalId, b: TerminalId): string | null {
 }
 
 /** Wrong-contact lessons, resolved per button type. */
-export function contactLesson(buttonKey: string, contactType: "NO" | "NC", terminal: string): string | null {
+export function contactLesson(
+  buttonKey: string,
+  contactType: "NO" | "NC",
+  terminal: string,
+): string | null {
   const isNoPair = terminal === "13" || terminal === "14";
   if (contactType === "NO" && !isNoPair)
     return `❌ ${buttonKey} is an NO button — use its NO contact (13/14). Terminals 21/22 are the NC contact.`;

@@ -10,9 +10,12 @@ import {
   polarityCheck,
 } from "@/lib/wiring/engine/feedback";
 import { PANEL_COMPONENTS } from "@/lib/wiring/config/panel";
+import { usePlcStatus } from "@/lib/plc/use-plc-status";
+import { sendWiring, resetPlc } from "@/lib/plc/plc-api";
 import { WiringCanvas } from "./WiringCanvas";
 import { ChecklistPanel } from "./ChecklistPanel";
 import { MessagePanel, type Message } from "./MessagePanel";
+import { PlcStatusBadge } from "./PlcStatusBadge";
 
 const INITIAL_MESSAGES: Message[] = [
   {
@@ -24,6 +27,8 @@ const INITIAL_MESSAGES: Message[] = [
 export function SimulatorShell() {
   const api = useWiring();
   const { evaluation } = api;
+  const plcStatus = usePlcStatus();
+  const plcReady = plcStatus === "running";
 
   const [hintMessages, setHintMessages] =
     React.useState<Message[]>(INITIAL_MESSAGES);
@@ -34,6 +39,18 @@ export function SimulatorShell() {
     new Set(),
   );
 
+  /* ---------- PLC sync: push wire list on every change ---------- */
+  // The backend maps wires -> coils and writes only the diff, so pushing
+  // the full list on every add/delete is cheap and keeps relays live.
+  React.useEffect(() => {
+    sendWiring(api.wires.map((w) => ({ from: w.from, to: w.to }))).catch(
+      () => {
+        /* bridge unreachable — badge already shows disconnected;
+           backend re-asserts saved intent on reconnect */
+      },
+    );
+  }, [api.wires]);
+
   const liveMessages = React.useMemo<Message[]>(() => {
     if (evaluation.dangers.length > 0) {
       return evaluation.dangers.map((d) => ({ kind: "err", text: d.message }));
@@ -42,12 +59,32 @@ export function SimulatorShell() {
       return [
         {
           kind: "ok",
-          text: "✅ All connections correct. Sending relay commands to ESP32…",
+          text: plcReady
+            ? "✅ All connections correct. Physical relays energized on the PLC."
+            : "✅ All connections correct — relays will energize when the PLC reconnects.",
         },
       ];
     }
+    if (plcStatus === "disconnected") {
+      return [
+        {
+          kind: "warn",
+          text: "⚠ Server disconnected — wiring is saved and will be applied to the hardware automatically on reconnect.",
+        },
+        ...hintMessages,
+      ];
+    }
+    if (plcStatus === "stopped") {
+      return [
+        {
+          kind: "warn",
+          text: "⚠ PLC is in STOP mode — switch it to RUN for outputs to respond.",
+        },
+        ...hintMessages,
+      ];
+    }
     return hintMessages;
-  }, [evaluation, hintMessages]);
+  }, [evaluation, hintMessages, plcStatus, plcReady]);
 
   React.useEffect(() => {
     setMissTerminals(new Set());
@@ -103,6 +140,12 @@ export function SimulatorShell() {
 
   const resetAll = () => {
     api.reset();
+    // Hardware reset: all coils OFF. (The wires effect will also push an
+    // empty list, but calling resetPlc() makes the intent explicit and
+    // works even if the wire list was already empty.)
+    resetPlc().catch(() => {
+      /* bridge unreachable — reset intent is saved server-side on reconnect */
+    });
     setHintMessages([
       { kind: "dim", text: "// Panel reset. Start from MCB L1/L2 OUT." },
     ]);
@@ -119,9 +162,13 @@ export function SimulatorShell() {
         <h1 className="text-[15px] font-bold">
           Wiring Simulator — Control Panel
         </h1>
-        <span className="ml-auto font-mono text-xs text-ink-dim">
-          SCENARIO 01 · <b className="text-ink">Basic Start-Stop</b> · FX3U-48M
-        </span>
+        <div className="ml-auto flex items-center gap-3">
+          <PlcStatusBadge status={plcStatus} />
+          <span className="font-mono text-xs text-ink-dim">
+            SCENARIO 01 · <b className="text-ink">Basic Start-Stop</b> ·
+            Haiwell
+          </span>
+        </div>
       </header>
 
       <div className="flex min-h-0 flex-1">
@@ -133,8 +180,9 @@ export function SimulatorShell() {
           />
           {evaluation.complete && (
             <div className="absolute left-1/2 top-4 -translate-x-1/2 border-2 border-ok bg-[#dcefe1] px-5 py-2 text-sm font-bold text-[#14532d]">
-              ✓ Wiring complete — physical relays energized. Ready for
-              programming.
+              {plcReady
+                ? "✓ Wiring complete — physical relays energized. Ready for programming."
+                : "✓ Wiring complete — waiting for PLC connection to energize relays."}
             </div>
           )}
         </div>

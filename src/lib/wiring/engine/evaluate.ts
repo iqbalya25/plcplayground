@@ -1,17 +1,23 @@
 import type { EvalResult, TaskResult, Wire } from "../types";
-import { buildNetMap, net, pairKey } from "./net";
+import { buildComponents, net } from "./net";
 import { dangerCheck } from "./feedback";
-import { BUTTON_KEYS, LAMP_KEYS, PANEL_COMPONENTS, X_INPUTS, Y_COM_GROUPS, Y_OUTPUTS } from "../config/panel";
+import {
+  BUTTON_KEYS,
+  LAMP_KEYS,
+  PANEL_COMPONENTS,
+  X_INPUTS,
+  Y_COM_GROUPS,
+  Y_OUTPUTS,
+} from "../config/panel";
 
-interface PathHit {
-  supplyWire?: Wire;
-  signalWire?: Wire;
-  /** Which contact terminal each wire touches (bypass detection). */
-  supplyTerm?: string;
-  signalTerm?: string;
-  address?: string;
-  full: boolean;
-}
+/* ------------------------------------------------------------------ */
+/*  Net-propagation evaluation                                         */
+/*                                                                     */
+/*  A task is satisfied when the target terminal is ELECTRICALLY on    */
+/*  the right net — through any path the user likes: the terminal      */
+/*  block, the PSU screw directly, or daisy-chained from another       */
+/*  device's supply terminal. This mirrors how real panels are wired.  */
+/* ------------------------------------------------------------------ */
 
 const CONTACT_PAIRS: Record<"NO" | "NC", [string, string]> = {
   NO: ["13", "14"],
@@ -23,67 +29,12 @@ function buttonContactType(key: string): "NO" | "NC" {
   return def?.contactType ?? "NO";
 }
 
-/**
- * Free-address matching for a 2-terminal contact device.
- * endNet ---[t1|t2]--- <any candidate address terminal>
- * Accepts either terminal orientation; refuses bypass (both wires on
- * the same contact terminal); each address may be claimed once.
- */
-function matchDevicePath(
-  netMap: Map<string, Wire[]>,
-  devKey: string,
-  pair: [string, string],
-  endNet: string,
-  candidates: readonly string[],
-  claimed: Set<string>,
-): PathHit {
-  const [t1, t2] = pair.map((t) => `${devKey}.${t}`) as [string, string];
-  const grab = (a: string, b: string): Wire | undefined => netMap.get(pairKey(a, b))?.[0];
-
-  const supply1 = grab(endNet, t1);
-  const supply2 = grab(endNet, t2);
-
-  // Try full path in both orientations against every free candidate address.
-  for (const addr of candidates) {
-    if (claimed.has(addr)) continue;
-    const plcTerm = `PLC.${addr}`;
-    const sig1 = grab(plcTerm, t2); // supply on t1 -> signal on t2
-    const sig2 = grab(plcTerm, t1); // supply on t2 -> signal on t1
-    if (supply1 && sig1) {
-      claimed.add(addr);
-      return { supplyWire: supply1, signalWire: sig1, supplyTerm: t1, signalTerm: t2, address: addr, full: true };
-    }
-    if (supply2 && sig2) {
-      claimed.add(addr);
-      return { supplyWire: supply2, signalWire: sig2, supplyTerm: t2, signalTerm: t1, address: addr, full: true };
-    }
-  }
-
-  // Partial credit: supply side alone, or signal side alone (no bypass).
-  const supplyWire = supply1 ?? supply2;
-  const supplyTerm = supply1 ? t1 : supply2 ? t2 : undefined;
-  let signalWire: Wire | undefined;
-  let signalTerm: string | undefined;
-  let address: string | undefined;
-  for (const addr of candidates) {
-    if (claimed.has(addr)) continue;
-    const plcTerm = `PLC.${addr}`;
-    const w1 = grab(plcTerm, t1);
-    const w2 = grab(plcTerm, t2);
-    const w = w1 ?? w2;
-    if (!w) continue;
-    const term = w1 ? t1 : t2;
-    if (supplyTerm && term === supplyTerm) continue; // bypass — not creditable
-    signalWire = w;
-    signalTerm = term;
-    address = addr;
-    break;
-  }
-  return { supplyWire, signalWire, supplyTerm, signalTerm, address, full: false };
+function deviceOf(t: string): string {
+  return t.split(".")[0];
 }
 
 export function evaluate(wires: readonly Wire[]): EvalResult {
-  const netMap = buildNetMap(wires);
+  const conn = buildComponents(wires);
   const okWireIds = new Set<string>();
   const tasks: TaskResult[] = [];
   const assignments: Record<string, string> = {};
@@ -93,92 +44,206 @@ export function evaluate(wires: readonly Wire[]): EvalResult {
     return msg ? [{ wireId: w.id, message: msg }] : [];
   });
 
-  const pairTask = (id: string, label: string, a: string, b: string): void => {
-    const w = netMap.get(pairKey(a, b))?.[0];
-    if (w) okWireIds.add(w.id);
-    tasks.push({ id, label, done: Boolean(w) });
+  /* ---------- source nets --------------------------------------- */
+  // A terminal is "on" a net if it connects to the source OR to the
+  // distribution block for that net. (The block itself must still be
+  // fed from the PSU — that's its own checklist task — so completeness
+  // always requires the full chain.)
+  const on0V = (t: string) =>
+    conn.connected(t, "PSU.0VDC") || conn.connected(t, "TB0");
+  const on24V = (t: string) =>
+    conn.connected(t, "PSU.24VDC") || conn.connected(t, "TB24");
+  const onL = (t: string) => conn.connected(t, "MCB.L1_OUT");
+  const onN = (t: string) => conn.connected(t, "MCB.L2_OUT");
+
+  const netTask = (id: string, label: string, done: boolean): void => {
+    tasks.push({ id, label, done });
   };
 
-  // --- fixed infrastructure ---
-  pairTask("ac-plc-l", "PLC power — MCB L1 OUT → PLC L", "MCB.L1_OUT", "PLC.L");
-  pairTask("ac-plc-n", "PLC power — MCB L2 OUT → PLC N", "MCB.L2_OUT", "PLC.N");
-  pairTask("ac-psu-l", "Power supply input — MCB L1 OUT → PSU L", "MCB.L1_OUT", "PSU.L_IN");
-  pairTask("ac-psu-n", "Power supply input — MCB L2 OUT → PSU N", "MCB.L2_OUT", "PSU.N_IN");
-  pairTask("dist-24", "24V distribution — PSU +V → +24V block", "PSU.24VDC", "TB24");
-  pairTask("dist-0", "0V distribution — PSU −V → 0V block", "PSU.0VDC", "TB0");
-  pairTask("ss", "Input common — +24V block → S/S", "TB24", "PLC.S/S");
+  /* ---------- fixed infrastructure (any path accepted) ----------- */
+  netTask("ac-plc-l", "PLC power — PLC L on the L line (from MCB L1 OUT)", onL("PLC.L"));
+  netTask("ac-plc-n", "PLC power — PLC N on the N line (from MCB L2 OUT)", onN("PLC.N"));
+  netTask("ac-psu-l", "Power supply input — PSU L on the L line", onL("PSU.L_IN"));
+  netTask("ac-psu-n", "Power supply input — PSU N on the N line", onN("PSU.N_IN"));
+  netTask("dist-24", "24V distribution — PSU +V → +24V block", conn.connected("PSU.24VDC", "TB24"));
+  netTask("dist-0", "0V distribution — PSU −V → 0V block", conn.connected("PSU.0VDC", "TB0"));
+  netTask("ss", "Input common — S/S on the 24V net", on24V("PLC.S/S"));
 
-  // --- buttons: free X address ---
-  const X_CANDIDATES = X_INPUTS;
+  /* ---------- buttons: free X address, supply from anywhere on 0V - */
   const claimedX = new Set<string>();
+  const bypassedDevices = new Set<string>();
+
   for (const key of BUTTON_KEYS) {
     const type = buttonContactType(key);
     const pair = CONTACT_PAIRS[type];
-    const hit = matchDevicePath(netMap, key, pair, "TB0", X_CANDIDATES, claimedX);
-    if (hit.supplyWire) okWireIds.add(hit.supplyWire.id);
-    if (hit.signalWire && (hit.full || hit.signalTerm !== hit.supplyTerm)) okWireIds.add(hit.signalWire.id);
-    if (hit.full && hit.address) assignments[key] = hit.address;
+    const [t1, t2] = pair.map((p) => `${key}.${p}`) as [string, string];
+
+    // Bypass: an external path joins both sides of the contact — the
+    // button would be permanently "pressed". Never creditable.
+    const bypassed = conn.connected(t1, t2);
+    if (bypassed) bypassedDevices.add(key);
+
+    const s1 = on0V(t1);
+    const s2 = on0V(t2);
+    const supplyDone = (s1 || s2) && !bypassed;
+
+    // Signal side: the OTHER contact terminal reaching any free X input.
+    let address: string | undefined;
+    if (!bypassed) {
+      const signalCandidates = s1 && !s2 ? [t2] : s2 && !s1 ? [t1] : [t1, t2];
+      outer: for (const st of signalCandidates) {
+        for (const addr of X_INPUTS) {
+          if (claimedX.has(addr)) continue;
+          if (conn.connected(st, `PLC.${addr}`)) {
+            address = addr;
+            break outer;
+          }
+        }
+      }
+    }
+    const signalDone = Boolean(address);
+    if (supplyDone && signalDone && address) {
+      claimedX.add(address);
+      assignments[key] = address;
+    }
+
     tasks.push({
       id: `${key}-supply`,
-      label: `${key} supply — 0V block → ${type} contact (${pair.join("/")})`,
-      done: Boolean(hit.supplyWire),
+      label: `${key} supply — 0V (block, PSU, or jumper) → ${type} contact (${pair.join("/")})`,
+      done: supplyDone,
     });
     tasks.push({
       id: `${key}-signal`,
       label: `${key} signal — ${type} contact → any free X input`,
-      done: Boolean(hit.signalWire),
-      detail: hit.address ? `→ ${hit.address}` : undefined,
+      done: signalDone,
+      detail: address ? `→ ${address}` : undefined,
     });
   }
 
-  // --- lamps: free Y address ---
-  const Y_CANDIDATES = Y_OUTPUTS;
+  /* ---------- lamps: free Y address, return to anywhere on 24V ---- */
   const claimedY = new Set<string>();
   const usedComGroups = new Set<string>();
+
   for (const key of LAMP_KEYS) {
-    const hit = matchDevicePath(netMap, key, ["X1", "X2"], "TB24", Y_CANDIDATES, claimedY);
-    if (hit.supplyWire) okWireIds.add(hit.supplyWire.id);
-    if (hit.signalWire && (hit.full || hit.signalTerm !== hit.supplyTerm)) okWireIds.add(hit.signalWire.id);
-    if (hit.full && hit.address) {
-      assignments[key] = hit.address;
-      const group = Object.entries(Y_COM_GROUPS).find(([, ys]) => ys.includes(hit.address!))?.[0];
+    const [t1, t2] = [`${key}.X1`, `${key}.X2`];
+
+    const bypassed = conn.connected(t1, t2);
+    if (bypassed) bypassedDevices.add(key);
+
+    const s1 = on24V(t1);
+    const s2 = on24V(t2);
+    const returnDone = (s1 || s2) && !bypassed;
+
+    let address: string | undefined;
+    if (!bypassed) {
+      const signalCandidates = s1 && !s2 ? [t2] : s2 && !s1 ? [t1] : [t1, t2];
+      outer: for (const st of signalCandidates) {
+        for (const addr of Y_OUTPUTS) {
+          if (claimedY.has(addr)) continue;
+          if (conn.connected(st, `PLC.${addr}`)) {
+            address = addr;
+            break outer;
+          }
+        }
+      }
+    }
+    const signalDone = Boolean(address);
+    if (returnDone && signalDone && address) {
+      claimedY.add(address);
+      assignments[key] = address;
+      const group = Object.entries(Y_COM_GROUPS).find(([, ys]) =>
+        ys.includes(address!),
+      )?.[0];
       if (group) usedComGroups.add(group);
     }
+
     tasks.push({
       id: `${key}-signal`,
       label: `${key} drive — any free Y output → lamp (X1/X2)`,
-      done: Boolean(hit.signalWire),
-      detail: hit.address ? `→ ${hit.address}` : undefined,
+      done: signalDone,
+      detail: address ? `→ ${address}` : undefined,
     });
     tasks.push({
       id: `${key}-return`,
-      label: `${key} return — lamp → +24V block`,
-      done: Boolean(hit.supplyWire),
+      label: `${key} return — lamp → +24V (block, PSU, or jumper)`,
+      done: returnDone,
     });
   }
 
-  // --- output commons: one task per COM group actually used ---
+  /* ---------- output commons: one task per COM group used --------- */
   if (usedComGroups.size === 0) {
     tasks.push({
       id: "com-pending",
-      label: "Output common — 0V block → COM of the Y group you use",
+      label: "Output common — 0V → COM of the Y group you use",
       done: false,
     });
   } else {
     for (const group of [...usedComGroups].sort()) {
-      pairTask(
+      netTask(
         `com-${group}`,
-        `Output common — 0V block → ${group} (${Y_COM_GROUPS[group].join(", ")})`,
-        "TB0",
-        `PLC.${group}`,
+        `Output common — 0V → ${group} (${Y_COM_GROUPS[group].join(", ")})`,
+        on0V(`PLC.${group}`),
       );
     }
   }
 
+  /* ---------- green wires (carrier rule) --------------------------- */
+  // A wire is credited when both of its ends are legitimate CARRIERS of
+  // the same net AND that net is actually live from its source. This is
+  // what lets a daisy-chain jumper (PB1.13 → PB2.13) turn green, while a
+  // sneaky 0V → X0 wire stays uncredited (an X input never carries raw 0V).
+  const supplyTermsOf = (key: string): string[] => {
+    const def = PANEL_COMPONENTS.find((c) => c.key === key);
+    if (def?.kind === "button") {
+      return CONTACT_PAIRS[def.contactType ?? "NO"].map((p) => `${key}.${p}`);
+    }
+    if (def?.kind === "lamp") return [`${key}.X1`, `${key}.X2`];
+    return [];
+  };
+
+  const carrier0V = (t: string): boolean => {
+    if (net(t) === "TB0" || t === "PSU.0VDC" || /^PLC\.COM\d+$/.test(t)) return true;
+    const dev = deviceOf(t);
+    return /^PB\d+$/.test(dev) && !bypassedDevices.has(dev) && supplyTermsOf(dev).includes(t);
+  };
+  const carrier24V = (t: string): boolean => {
+    if (net(t) === "TB24" || t === "PSU.24VDC" || t === "PLC.S/S") return true;
+    const dev = deviceOf(t);
+    return /^LAMP\d+$/.test(dev) && !bypassedDevices.has(dev) && supplyTermsOf(dev).includes(t);
+  };
+  const carrierL = (t: string): boolean =>
+    t === "MCB.L1_OUT" || t === "PSU.L_IN" || t === "PLC.L";
+  const carrierN = (t: string): boolean =>
+    t === "MCB.L2_OUT" || t === "PSU.N_IN" || t === "PLC.N";
+
+  // Direct signal wires: assigned device contact/element <-> its PLC address.
+  const signalPairs = new Set<string>();
+  for (const [key, addr] of Object.entries(assignments)) {
+    for (const st of supplyTermsOf(key)) {
+      signalPairs.add([st, `PLC.${addr}`].sort().join("|"));
+    }
+  }
+
+  for (const w of wires) {
+    const a = w.from;
+    const b = w.to;
+    if (deviceOf(a) === deviceOf(b)) continue; // self-jumper never green
+
+    const distribution =
+      (carrier0V(a) && carrier0V(b) && on0V(a)) ||
+      (carrier24V(a) && carrier24V(b) && on24V(a)) ||
+      (carrierL(a) && carrierL(b) && onL(a)) ||
+      (carrierN(a) && carrierN(b) && onN(a));
+
+    const signal = signalPairs.has([a, b].sort().join("|"));
+
+    if (distribution || signal) okWireIds.add(w.id);
+  }
+
   const allDone = tasks.every((t) => t.done);
   const leftovers = wires.some((w) => !okWireIds.has(w.id));
-  const complete = allDone && dangers.length === 0 && !leftovers && wires.length > 0;
+  const complete =
+    allDone && dangers.length === 0 && !leftovers && wires.length > 0;
 
   return { tasks, okWireIds, dangers, assignments, complete };
 }
-
