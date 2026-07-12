@@ -1,0 +1,569 @@
+"use client";
+
+import * as React from "react";
+import type { ComponentDef, Point, TerminalId, Wire } from "@/lib/wiring/types";
+import {
+  CANVAS_H,
+  CANVAS_W,
+  PANEL_COMPONENTS,
+} from "@/lib/wiring/config/panel";
+import { net } from "@/lib/wiring/engine/net";
+import { dangerCheck } from "@/lib/wiring/engine/feedback";
+import type { WiringApi } from "@/lib/wiring/hooks/use-wiring";
+
+/* ---------- geometry helpers ---------- */
+
+export function terminalPosition(
+  componentKey: string,
+  terminalId: string,
+): Point {
+  const c = PANEL_COMPONENTS.find((x) => x.key === componentKey);
+  if (!c) return { x: 0, y: 0 };
+  const t = c.terminals.find((x) => x.id === terminalId);
+  if (!t) return { x: 0, y: 0 };
+  return { x: c.x + (c.w * t.xPct) / 100, y: c.y + (c.h * t.yPct) / 100 };
+}
+
+function termPos(id: TerminalId): Point {
+  const [comp, ...rest] = id.split(".");
+  return terminalPosition(comp, rest.join("."));
+}
+
+function orthoPath(points: readonly Point[], end?: Point): string {
+  const all = end ? [...points, end] : [...points];
+  if (all.length < 2) return "";
+  let d = `M ${all[0].x} ${all[0].y}`;
+  for (let i = 1; i < all.length; i++) {
+    const a = all[i - 1];
+    const b = all[i];
+    d += ` L ${b.x} ${a.y} L ${b.x} ${b.y}`;
+  }
+  return d;
+}
+
+function wireColor(t: TerminalId): string {
+  const n = net(t);
+  if (n === "TB24" || /L1_|L_IN|^PLC\.L$|24VDC/.test(t)) return "#d32f2f";
+  if (n === "TB0" || /L2_|N_IN|^PLC\.N$|0VDC/.test(t)) return "#17191c";
+  if (/PE|GND/.test(t)) return "#7a9c00";
+  return "#1565c0";
+}
+
+/* ---------- viewport (zoom / pan) ---------- */
+
+interface ViewBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+const FULL_VIEW: ViewBox = { x: 0, y: 0, w: CANVAS_W, h: CANVAS_H };
+const MIN_W = CANVAS_W / 6; // max zoom-in 6x
+const MAX_W = CANVAS_W * 1.5; // max zoom-out 1.5x
+
+function clampView(v: ViewBox): ViewBox {
+  const w = Math.min(Math.max(v.w, MIN_W), MAX_W);
+  const h = (w / CANVAS_W) * CANVAS_H;
+  return { x: v.x, y: v.y, w, h };
+}
+
+/* ---------- subcomponents ---------- */
+
+function ImageComponent({ def }: { def: ComponentDef }) {
+  return (
+    <image
+      href={def.imageSrc}
+      x={def.x}
+      y={def.y}
+      width={def.w}
+      height={def.h}
+      preserveAspectRatio="none"
+    />
+  );
+}
+
+function DeviceBox({ def }: { def: ComponentDef }) {
+  const cx = def.x + def.w / 2;
+  const actuatorY = def.kind === "lamp" ? def.y + def.h - 42 : def.y + 62;
+  return (
+    <g>
+      <rect
+        x={def.x}
+        y={def.y}
+        width={def.w}
+        height={def.h}
+        fill="#f4f5f6"
+        stroke="#4a4f54"
+        strokeWidth={2}
+      />
+      <text
+        x={cx}
+        y={def.y + 18}
+        textAnchor="middle"
+        fontSize={11}
+        fontWeight={700}
+        fill="#1d2023"
+      >
+        {def.name}
+      </text>
+      <text
+        x={cx}
+        y={def.y + 31}
+        textAnchor="middle"
+        fontSize={9}
+        fill="#5c6268"
+      >
+        {def.subtitle}
+      </text>
+      <rect
+        x={cx - 22}
+        y={actuatorY - 22}
+        width={44}
+        height={44}
+        fill="#dfe2e5"
+        stroke="#4a4f54"
+        strokeWidth={1.5}
+      />
+      <circle
+        cx={cx}
+        cy={actuatorY}
+        r={15}
+        fill={def.kind === "lamp" ? "#fff3cd" : def.accent}
+        stroke="#33383d"
+        strokeWidth={1.5}
+      />
+      {def.kind === "lamp" && (
+        <circle cx={cx} cy={actuatorY} r={8} fill={def.accent} />
+      )}
+      {def.kind === "button" && (
+        <>
+          <text
+            x={def.x + def.w * 0.23}
+            y={def.y + def.h * 0.84 - 14}
+            textAnchor="middle"
+            fontSize={8}
+            fontWeight={700}
+            fill="#8a9096"
+            fontFamily="Consolas, monospace"
+          >
+            NO
+          </text>
+          <text
+            x={def.x + def.w * 0.77}
+            y={def.y + def.h * 0.84 - 14}
+            textAnchor="middle"
+            fontSize={8}
+            fontWeight={700}
+            fill="#8a9096"
+            fontFamily="Consolas, monospace"
+          >
+            NC
+          </text>
+        </>
+      )}
+    </g>
+  );
+}
+
+function TerminalBlock({ def }: { def: ComponentDef }) {
+  return (
+    <g>
+      <rect
+        x={def.x}
+        y={def.y}
+        width={def.w}
+        height={def.h}
+        fill="#f4f5f6"
+        stroke="#4a4f54"
+        strokeWidth={2}
+      />
+      <rect x={def.x} y={def.y} width={8} height={def.h} fill={def.accent} />
+      <text
+        x={def.x + 16}
+        y={def.y + 13}
+        fontSize={9}
+        fontWeight={700}
+        fill="#8a9096"
+        fontFamily="Consolas, monospace"
+      >
+        {def.name}
+      </text>
+    </g>
+  );
+}
+
+interface TerminalDotProps {
+  id: TerminalId;
+  pos: Point;
+  label?: string;
+  labelSide?: "above" | "below";
+  fixed?: boolean;
+  state: "idle" | "active" | "miss" | "bad";
+  onClick: (id: TerminalId) => void;
+}
+
+function TerminalDot({
+  id,
+  pos,
+  label,
+  labelSide,
+  fixed,
+  state,
+  onClick,
+}: TerminalDotProps) {
+  const fill =
+    state === "active"
+      ? "#e6a800"
+      : state === "miss"
+        ? "#ffd54f"
+        : state === "bad"
+          ? "#ef9a9a"
+          : fixed
+            ? "#b7bcc1"
+            : "#e3e6e9";
+  const stroke =
+    state === "miss"
+      ? "#c77700"
+      : state === "bad"
+        ? "#c62828"
+        : fixed
+          ? "#7d838a"
+          : "#4a4f54";
+  return (
+    <g>
+      <circle
+        cx={pos.x}
+        cy={pos.y}
+        r={7}
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={1.6}
+        className={
+          fixed ? "cursor-not-allowed" : "cursor-pointer hover:fill-[#e6a800]"
+        }
+        style={
+          state === "miss" ? { animation: "pulse 1s infinite" } : undefined
+        }
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!fixed) onClick(id);
+        }}
+      />
+      {label && (
+        <text
+          x={pos.x}
+          y={pos.y + (labelSide === "above" ? -12 : 20)}
+          textAnchor="middle"
+          fontSize={9}
+          fontWeight={700}
+          fill="#1d2023"
+          fontFamily="Consolas, monospace"
+          pointerEvents="none"
+        >
+          {label}
+        </text>
+      )}
+    </g>
+  );
+}
+
+/* ---------- main canvas ---------- */
+
+export interface WiringCanvasProps {
+  api: WiringApi;
+  missTerminals: ReadonlySet<string>;
+  badWireIds: ReadonlySet<string>;
+}
+
+export function WiringCanvas({
+  api,
+  missTerminals,
+  badWireIds,
+}: WiringCanvasProps) {
+  const svgRef = React.useRef<SVGSVGElement>(null);
+  const [cursor, setCursor] = React.useState<Point | null>(null);
+  const [view, setView] = React.useState<ViewBox>(FULL_VIEW);
+
+  // pan bookkeeping — refs so mousemove stays cheap
+  const panRef = React.useRef<{
+    startClient: Point;
+    startView: ViewBox;
+    moved: boolean;
+  } | null>(null);
+  const suppressClickRef = React.useRef(false);
+
+  const toSvgPoint = React.useCallback(
+    (clientX: number, clientY: number): Point => {
+      const svg = svgRef.current;
+      if (!svg) return { x: 0, y: 0 };
+      const pt = svg.createSVGPoint();
+      pt.x = clientX;
+      pt.y = clientY;
+      const m = svg.getScreenCTM();
+      const p = m ? pt.matrixTransform(m.inverse()) : { x: 0, y: 0 };
+      return { x: p.x, y: p.y };
+    },
+    [],
+  );
+
+  /* wheel zoom toward the cursor — non-passive so we can preventDefault */
+  React.useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const focus = toSvgPoint(e.clientX, e.clientY);
+      setView((v) => {
+        const factor = e.deltaY > 0 ? 1.12 : 1 / 1.12;
+        const next = clampView({ ...v, w: v.w * factor, h: v.h * factor });
+        const scale = next.w / v.w;
+        return {
+          ...next,
+          x: focus.x - (focus.x - v.x) * scale,
+          y: focus.y - (focus.y - v.y) * scale,
+        };
+      });
+    };
+    svg.addEventListener("wheel", onWheel, { passive: false });
+    return () => svg.removeEventListener("wheel", onWheel);
+  }, [toSvgPoint]);
+
+  /* pan: middle-mouse drag, or left drag on empty space while holding Space */
+  const spaceDown = React.useRef(false);
+  React.useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.code === "Space") spaceDown.current = true;
+      if (e.key === "Escape") api.cancelDraft();
+      if ((e.key === "Delete" || e.key === "Backspace") && api.selectedWireId) {
+        e.preventDefault();
+        api.deleteWire(api.selectedWireId);
+      }
+    };
+    const up = (e: KeyboardEvent) => {
+      if (e.code === "Space") spaceDown.current = false;
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+    };
+  }, [api]);
+
+  const onMouseDown = (e: React.MouseEvent) => {
+    const middle = e.button === 1;
+    const spacePan = e.button === 0 && spaceDown.current;
+    if (middle || spacePan) {
+      e.preventDefault();
+      panRef.current = {
+        startClient: { x: e.clientX, y: e.clientY },
+        startView: view,
+        moved: false,
+      };
+    }
+  };
+
+  const onMouseMove = (e: React.MouseEvent) => {
+    const pan = panRef.current;
+    if (pan) {
+      const svg = svgRef.current;
+      if (!svg) return;
+      const rect = svg.getBoundingClientRect();
+      // pixels -> svg units at the CURRENT zoom of the pan start
+      const unitPerPx = pan.startView.w / rect.width;
+      const dx = (e.clientX - pan.startClient.x) * unitPerPx;
+      const dy = (e.clientY - pan.startClient.y) * unitPerPx;
+      if (Math.abs(dx) + Math.abs(dy) > 2) pan.moved = true;
+      setView({
+        ...pan.startView,
+        x: pan.startView.x - dx,
+        y: pan.startView.y - dy,
+      });
+      return;
+    }
+    if (api.draft) setCursor(toSvgPoint(e.clientX, e.clientY));
+  };
+
+  const onMouseUp = () => {
+    if (panRef.current?.moved) suppressClickRef.current = true;
+    panRef.current = null;
+  };
+
+  const handleTerminalClick = (id: TerminalId) => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
+    if (!api.draft) api.startDraft(id, termPos(id));
+    else if (api.draft.from !== id) api.commitDraft(id, termPos(id));
+  };
+
+  const handleCanvasClick = (e: React.MouseEvent) => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
+    if (api.draft) api.addAnchor(toSvgPoint(e.clientX, e.clientY));
+    else api.selectWire(null);
+  };
+
+  const zoomBy = (factor: number) => {
+    setView((v) => {
+      const cx = v.x + v.w / 2;
+      const cy = v.y + v.h / 2;
+      const next = clampView({ ...v, w: v.w * factor, h: v.h * factor });
+      return { ...next, x: cx - next.w / 2, y: cy - next.h / 2 };
+    });
+  };
+
+  const wireClass = (w: Wire): string => {
+    if (dangerCheck(w.from, w.to))
+      return "stroke-[#b71c1c] [stroke-dasharray:10_6]";
+    if (badWireIds.has(w.id)) return "stroke-[#c62828]";
+    if (api.evaluation.okWireIds.has(w.id)) return "stroke-[#1e8a45]";
+    return "";
+  };
+
+  const mcbIn = [
+    terminalPosition("MCB", "L1_IN"),
+    terminalPosition("MCB", "L2_IN"),
+  ];
+
+  return (
+    <>
+      <svg
+        ref={svgRef}
+        viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
+        preserveAspectRatio="xMidYMid meet"
+        className="h-full w-full cursor-crosshair bg-panel-plate"
+        onClick={handleCanvasClick}
+        onMouseDown={onMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={onMouseUp}
+        onMouseLeave={onMouseUp}
+      >
+        {PANEL_COMPONENTS.map((c) => {
+          if (c.kind === "image") return <ImageComponent key={c.key} def={c} />;
+          if (c.kind === "terminalBlock")
+            return <TerminalBlock key={c.key} def={c} />;
+          return <DeviceBox key={c.key} def={c} />;
+        })}
+
+        <g>
+          {mcbIn.map((p, i) => (
+            <path
+              key={i}
+              d={`M ${p.x} ${p.y - 55} L ${p.x} ${p.y}`}
+              fill="none"
+              stroke="#9aa0a6"
+              strokeWidth={3.5}
+              strokeDasharray="2 4"
+            />
+          ))}
+          <text
+            x={(mcbIn[0].x + mcbIn[1].x) / 2}
+            y={mcbIn[0].y - 63}
+            textAnchor="middle"
+            fontSize={10}
+            fill="#8a9096"
+            fontFamily="Consolas, monospace"
+          >
+            220VAC (pre-wired)
+          </text>
+        </g>
+
+        {api.wires.map((w) => {
+          const d = orthoPath([...w.points]);
+          const selected = api.selectedWireId === w.id;
+          return (
+            <g key={w.id}>
+              <path
+                d={d}
+                fill="none"
+                stroke="transparent"
+                strokeWidth={14}
+                className="cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!suppressClickRef.current) api.selectWire(w.id);
+                  suppressClickRef.current = false;
+                }}
+              />
+              <path
+                d={d}
+                fill="none"
+                stroke={wireColor(w.from)}
+                strokeWidth={3.5}
+                strokeLinecap="square"
+                strokeLinejoin="miter"
+                className={`${wireClass(w)} ${selected ? "drop-shadow-[0_0_3px_#e6a800]" : ""} pointer-events-none`}
+              />
+            </g>
+          );
+        })}
+
+        {api.draft && cursor && (
+          <path
+            d={orthoPath(api.draft.points, cursor)}
+            fill="none"
+            stroke="#e6a800"
+            strokeWidth={2.5}
+            strokeDasharray="6 5"
+            pointerEvents="none"
+          />
+        )}
+
+        {PANEL_COMPONENTS.flatMap((c) =>
+          c.terminals.map((t) => {
+            const id = `${c.key}.${t.id}`;
+            const pos = terminalPosition(c.key, t.id);
+            const state =
+              api.draft?.from === id
+                ? "active"
+                : missTerminals.has(id)
+                  ? "miss"
+                  : "idle";
+            return (
+              <TerminalDot
+                key={id}
+                id={id}
+                pos={pos}
+                label={t.label}
+                labelSide={t.labelSide}
+                fixed={t.fixed}
+                state={state}
+                onClick={handleTerminalClick}
+              />
+            );
+          }),
+        )}
+      </svg>
+
+      {/* zoom controls */}
+      <div className="absolute bottom-3 right-3 flex flex-col border border-panel-border bg-panel-box">
+        <button
+          className="h-9 w-9 border-b border-panel-border text-lg font-bold hover:bg-white"
+          title="Zoom in (or mouse wheel)"
+          onClick={() => zoomBy(1 / 1.25)}
+        >
+          +
+        </button>
+        <button
+          className="h-9 w-9 border-b border-panel-border text-lg font-bold hover:bg-white"
+          title="Zoom out"
+          onClick={() => zoomBy(1.25)}
+        >
+          −
+        </button>
+        <button
+          className="h-9 w-9 text-[10px] font-bold hover:bg-white"
+          title="Fit whole panel"
+          onClick={() => setView(FULL_VIEW)}
+        >
+          FIT
+        </button>
+      </div>
+    </>
+  );
+}
