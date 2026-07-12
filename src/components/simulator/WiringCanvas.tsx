@@ -7,8 +7,8 @@ import {
   CANVAS_W,
   PANEL_COMPONENTS,
 } from "@/lib/wiring/config/panel";
-import { net } from "@/lib/wiring/engine/net";
 import { dangerCheck } from "@/lib/wiring/engine/feedback";
+import { CABLE_COLORS } from "@/lib/wiring/hooks/use-wiring";
 import type { WiringApi } from "@/lib/wiring/hooks/use-wiring";
 
 /* ---------- geometry helpers ---------- */
@@ -41,12 +41,36 @@ function orthoPath(points: readonly Point[], end?: Point): string {
   return d;
 }
 
-function wireColor(t: TerminalId): string {
-  const n = net(t);
-  if (n === "TB24" || /L1_|L_IN|^PLC\.L$|24VDC/.test(t)) return "#d32f2f";
-  if (n === "TB0" || /L2_|N_IN|^PLC\.N$|0VDC/.test(t)) return "#17191c";
-  if (/PE|GND/.test(t)) return "#7a9c00";
-  return "#1565c0";
+/** Same elbow expansion as orthoPath, but as a vertex list (for hit-testing). */
+function orthoVertices(points: readonly Point[]): Point[] {
+  if (points.length < 2) return [...points];
+  const out: Point[] = [points[0]];
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1];
+    const b = points[i];
+    out.push({ x: b.x, y: a.y }, { x: b.x, y: b.y });
+  }
+  return out;
+}
+
+/** Distance from a point to an axis-aligned segment. */
+function segmentDistance(p: Point, a: Point, b: Point): number {
+  const minX = Math.min(a.x, b.x);
+  const maxX = Math.max(a.x, b.x);
+  const minY = Math.min(a.y, b.y);
+  const maxY = Math.max(a.y, b.y);
+  const cx = Math.min(Math.max(p.x, minX), maxX);
+  const cy = Math.min(Math.max(p.y, minY), maxY);
+  return Math.hypot(p.x - cx, p.y - cy);
+}
+
+function wireDistance(w: Wire, p: Point): number {
+  const v = orthoVertices(w.points);
+  let best = Infinity;
+  for (let i = 1; i < v.length; i++) {
+    best = Math.min(best, segmentDistance(p, v[i - 1], v[i]));
+  }
+  return best;
 }
 
 /* ---------- viewport (zoom / pan) ---------- */
@@ -334,7 +358,10 @@ export function WiringCanvas({
   React.useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (e.code === "Space") spaceDown.current = true;
-      if (e.key === "Escape") api.cancelDraft();
+      if (e.key === "Escape") {
+        if (api.draft) api.cancelDraft();
+        else if (api.selectedWireId) api.selectWire(null);
+      }
       if ((e.key === "Delete" || e.key === "Backspace") && api.selectedWireId) {
         e.preventDefault();
         api.deleteWire(api.selectedWireId);
@@ -408,27 +435,41 @@ export function WiringCanvas({
     else api.selectWire(null);
   };
 
-  const zoomBy = (factor: number) => {
-    setView((v) => {
-      const cx = v.x + v.w / 2;
-      const cy = v.y + v.h / 2;
-      const next = clampView({ ...v, w: v.w * factor, h: v.h * factor });
-      return { ...next, x: cx - next.w / 2, y: cy - next.h / 2 };
-    });
+  /**
+   * Overlap-aware wire selection with click-cycling:
+   * find every cable within tolerance of the click point; if the current
+   * selection is one of them, step to the next — repeated clicks on a
+   * crowded spot walk through each overlapping cable in turn.
+   */
+  const handleWireClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
+    const p = toSvgPoint(e.clientX, e.clientY);
+    const TOLERANCE = 9; // svg units — matches the 14-wide hit stroke
+    const candidates = api.wires.filter((w) => wireDistance(w, p) <= TOLERANCE);
+    if (candidates.length === 0) return;
+
+    const idx = candidates.findIndex((w) => w.id === api.selectedWireId);
+    const next =
+      idx === -1
+        ? candidates[candidates.length - 1] // topmost first
+        : candidates[(idx + 1) % candidates.length]; // then cycle
+    api.selectWire(next.id);
   };
 
-  const wireClass = (w: Wire): string => {
-    if (dangerCheck(w.from, w.to))
-      return "stroke-[#b71c1c] [stroke-dasharray:10_6]";
-    if (badWireIds.has(w.id)) return "stroke-[#c62828]";
-    if (api.evaluation.okWireIds.has(w.id)) return "stroke-[#1e8a45]";
-    return "";
-  };
+  /** Errors only: red dashed. Correct cables keep their body color. */
+  const isWrong = (w: Wire): boolean =>
+    Boolean(dangerCheck(w.from, w.to)) || badWireIds.has(w.id);
 
   const mcbIn = [
     terminalPosition("MCB", "L1_IN"),
     terminalPosition("MCB", "L2_IN"),
   ];
+
+  const hasSelection = api.selectedWireId !== null;
 
   return (
     <>
@@ -476,28 +517,38 @@ export function WiringCanvas({
         {api.wires.map((w) => {
           const d = orthoPath([...w.points]);
           const selected = api.selectedWireId === w.id;
+          const wrong = isWrong(w);
+          const dimmed = hasSelection && !selected;
           return (
-            <g key={w.id}>
+            <g key={w.id} className={dimmed ? "opacity-30" : ""}>
               <path
                 d={d}
                 fill="none"
                 stroke="transparent"
                 strokeWidth={14}
                 className="cursor-pointer"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (!suppressClickRef.current) api.selectWire(w.id);
-                  suppressClickRef.current = false;
-                }}
+                onClick={handleWireClick}
+              />
+              {/* jacket outline — keeps light colors (white/yellow) visible */}
+              <path
+                d={d}
+                fill="none"
+                stroke="#3f4449"
+                strokeWidth={5}
+                strokeLinecap="square"
+                strokeLinejoin="miter"
+                className="pointer-events-none"
+                opacity={wrong ? 0 : 0.55}
               />
               <path
                 d={d}
                 fill="none"
-                stroke={wireColor(w.from)}
+                stroke={wrong ? "#b71c1c" : w.color}
                 strokeWidth={3.5}
                 strokeLinecap="square"
                 strokeLinejoin="miter"
-                className={`${wireClass(w)} ${selected ? "drop-shadow-[0_0_3px_#e6a800]" : ""} pointer-events-none`}
+                strokeDasharray={wrong ? "10 6" : undefined}
+                className={`${selected ? "drop-shadow-[0_0_4px_#e6a800]" : ""} pointer-events-none`}
               />
             </g>
           );
@@ -507,7 +558,7 @@ export function WiringCanvas({
           <path
             d={orthoPath(api.draft.points, cursor)}
             fill="none"
-            stroke="#e6a800"
+            stroke={api.drawColor}
             strokeWidth={2.5}
             strokeDasharray="6 5"
             pointerEvents="none"
@@ -540,19 +591,56 @@ export function WiringCanvas({
         )}
       </svg>
 
+      {/* cable color palette — sticky drawing color, recolors selected cable */}
+      <div className="absolute right-3 top-3 flex items-center gap-1.5 border border-panel-border bg-panel-box px-2 py-1.5">
+        <span className="mr-1 font-mono text-[9px] font-bold tracking-wide text-ink-dim">
+          CABLE
+        </span>
+        {CABLE_COLORS.map((c) => {
+          const active = api.drawColor === c.value;
+          return (
+            <button
+              key={c.value}
+              title={c.name}
+              onClick={() => api.setDrawColor(c.value)}
+              className={`h-6 w-6 border-2 transition-transform ${
+                active
+                  ? "scale-110 border-[#e6a800]"
+                  : "border-[#9aa0a6] hover:scale-105"
+              }`}
+              style={{ backgroundColor: c.value }}
+            />
+          );
+        })}
+      </div>
+
       {/* zoom controls */}
       <div className="absolute bottom-3 right-3 flex flex-col border border-panel-border bg-panel-box">
         <button
           className="h-9 w-9 border-b border-panel-border text-lg font-bold hover:bg-white"
           title="Zoom in (or mouse wheel)"
-          onClick={() => zoomBy(1 / 1.25)}
+          onClick={() =>
+            setView((v) => {
+              const cx = v.x + v.w / 2;
+              const cy = v.y + v.h / 2;
+              const next = clampView({ ...v, w: v.w / 1.25, h: v.h / 1.25 });
+              return { ...next, x: cx - next.w / 2, y: cy - next.h / 2 };
+            })
+          }
         >
           +
         </button>
         <button
           className="h-9 w-9 border-b border-panel-border text-lg font-bold hover:bg-white"
           title="Zoom out"
-          onClick={() => zoomBy(1.25)}
+          onClick={() =>
+            setView((v) => {
+              const cx = v.x + v.w / 2;
+              const cy = v.y + v.h / 2;
+              const next = clampView({ ...v, w: v.w * 1.25, h: v.h * 1.25 });
+              return { ...next, x: cx - next.w / 2, y: cy - next.h / 2 };
+            })
+          }
         >
           −
         </button>

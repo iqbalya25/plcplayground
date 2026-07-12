@@ -1,8 +1,20 @@
 "use client";
 
-import { useCallback, useMemo, useReducer } from "react";
+import { useCallback, useMemo, useReducer, useState } from "react";
 import type { Point, TerminalId, Wire } from "../types";
 import { evaluate } from "../engine/evaluate";
+
+/** Sticky palette: black by default, no red (red is reserved for errors). */
+export const CABLE_COLORS = [
+  { name: "Black", value: "#17191c" },
+  { name: "Blue", value: "#1565c0" },
+  { name: "Yellow", value: "#f3b300" },
+  { name: "Green", value: "#2e7d32" },
+  { name: "White", value: "#f2f3f4" },
+  { name: "Grey", value: "#8a9096" },
+] as const;
+
+export const DEFAULT_CABLE_COLOR = CABLE_COLORS[0].value; // black
 
 interface DraftWire {
   from: TerminalId;
@@ -18,10 +30,11 @@ interface WiringState {
 type Action =
   | { type: "startDraft"; from: TerminalId; at: Point }
   | { type: "addAnchor"; at: Point }
-  | { type: "commitDraft"; to: TerminalId; at: Point }
+  | { type: "commitDraft"; to: TerminalId; at: Point; color: string }
   | { type: "cancelDraft" }
   | { type: "selectWire"; id: string | null }
   | { type: "deleteWire"; id: string }
+  | { type: "recolorWire"; id: string; color: string }
   | { type: "reset" };
 
 let wireSeq = 0;
@@ -52,6 +65,7 @@ function reducer(state: WiringState, action: Action): WiringState {
         from: state.draft.from,
         to: action.to,
         points: [...state.draft.points, action.at],
+        color: action.color,
       };
       return { ...state, wires: [...state.wires, wire], draft: null };
     }
@@ -65,6 +79,13 @@ function reducer(state: WiringState, action: Action): WiringState {
         wires: state.wires.filter((w) => w.id !== action.id),
         selectedWireId:
           state.selectedWireId === action.id ? null : state.selectedWireId,
+      };
+    case "recolorWire":
+      return {
+        ...state,
+        wires: state.wires.map((w) =>
+          w.id === action.id ? { ...w, color: action.color } : w,
+        ),
       };
     case "reset":
       return { wires: [], draft: null, selectedWireId: null };
@@ -80,6 +101,12 @@ export function useWiring() {
     selectedWireId: null,
   });
 
+  /**
+   * Sticky drawing color: stays until the user picks another swatch.
+   * Picking a swatch while a wire is selected also recolors that wire.
+   */
+  const [drawColor, setDrawColorState] = useState<string>(DEFAULT_CABLE_COLOR);
+
   const evaluation = useMemo(() => evaluate(state.wires), [state.wires]);
 
   const startDraft = useCallback(
@@ -91,8 +118,9 @@ export function useWiring() {
     [],
   );
   const commitDraft = useCallback(
-    (to: TerminalId, at: Point) => dispatch({ type: "commitDraft", to, at }),
-    [],
+    (to: TerminalId, at: Point) =>
+      dispatch({ type: "commitDraft", to, at, color: drawColor }),
+    [drawColor],
   );
   const cancelDraft = useCallback(() => dispatch({ type: "cancelDraft" }), []);
   const selectWire = useCallback(
@@ -105,9 +133,23 @@ export function useWiring() {
   );
   const reset = useCallback(() => dispatch({ type: "reset" }), []);
 
+  const setDrawColor = useCallback(
+    (color: string) => {
+      setDrawColorState(color);
+      // Recolor the selected cable too — gives users a repair path for
+      // "I drew it in the wrong color".
+      if (state.selectedWireId) {
+        dispatch({ type: "recolorWire", id: state.selectedWireId, color });
+      }
+    },
+    [state.selectedWireId],
+  );
+
   return {
     ...state,
     evaluation,
+    drawColor,
+    setDrawColor,
     startDraft,
     addAnchor,
     commitDraft,

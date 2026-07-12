@@ -12,6 +12,8 @@ export interface Wire {
   to: TerminalId;
   /** Anchor points placed by the user; rendered with orthogonal elbows. */
   points: Point[];
+  /** Cable body color chosen by the user (sticky palette, defaults to black). */
+  color: string;
 }
 
 export type ComponentKind = "image" | "button" | "lamp" | "terminalBlock";
@@ -59,7 +61,7 @@ export interface DangerHit {
 
 export interface EvalResult {
   tasks: TaskResult[];
-  /** Wires that belong to a satisfied task (rendered green). */
+  /** Wires accounted for by a satisfied task (used for completeness, not painted). */
   okWireIds: ReadonlySet<string>;
   dangers: DangerHit[];
   /** Button/lamp → assigned PLC address (for UI feedback). */
