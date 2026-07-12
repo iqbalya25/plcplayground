@@ -30,10 +30,20 @@ const nextWireId = () => `w${++wireSeq}`;
 function reducer(state: WiringState, action: Action): WiringState {
   switch (action.type) {
     case "startDraft":
-      return { ...state, draft: { from: action.from, points: [action.at] }, selectedWireId: null };
+      return {
+        ...state,
+        draft: { from: action.from, points: [action.at] },
+        selectedWireId: null,
+      };
     case "addAnchor":
       return state.draft
-        ? { ...state, draft: { ...state.draft, points: [...state.draft.points, action.at] } }
+        ? {
+            ...state,
+            draft: {
+              ...state.draft,
+              points: [...state.draft.points, action.at],
+            },
+          }
         : state;
     case "commitDraft": {
       if (!state.draft || state.draft.from === action.to) return state;
@@ -53,7 +63,8 @@ function reducer(state: WiringState, action: Action): WiringState {
       return {
         ...state,
         wires: state.wires.filter((w) => w.id !== action.id),
-        selectedWireId: state.selectedWireId === action.id ? null : state.selectedWireId,
+        selectedWireId:
+          state.selectedWireId === action.id ? null : state.selectedWireId,
       };
     case "reset":
       return { wires: [], draft: null, selectedWireId: null };
@@ -71,12 +82,27 @@ export function useWiring() {
 
   const evaluation = useMemo(() => evaluate(state.wires), [state.wires]);
 
-  const startDraft = useCallback((from: TerminalId, at: Point) => dispatch({ type: "startDraft", from, at }), []);
-  const addAnchor = useCallback((at: Point) => dispatch({ type: "addAnchor", at }), []);
-  const commitDraft = useCallback((to: TerminalId, at: Point) => dispatch({ type: "commitDraft", to, at }), []);
+  const startDraft = useCallback(
+    (from: TerminalId, at: Point) => dispatch({ type: "startDraft", from, at }),
+    [],
+  );
+  const addAnchor = useCallback(
+    (at: Point) => dispatch({ type: "addAnchor", at }),
+    [],
+  );
+  const commitDraft = useCallback(
+    (to: TerminalId, at: Point) => dispatch({ type: "commitDraft", to, at }),
+    [],
+  );
   const cancelDraft = useCallback(() => dispatch({ type: "cancelDraft" }), []);
-  const selectWire = useCallback((id: string | null) => dispatch({ type: "selectWire", id }), []);
-  const deleteWire = useCallback((id: string) => dispatch({ type: "deleteWire", id }), []);
+  const selectWire = useCallback(
+    (id: string | null) => dispatch({ type: "selectWire", id }),
+    [],
+  );
+  const deleteWire = useCallback(
+    (id: string) => dispatch({ type: "deleteWire", id }),
+    [],
+  );
   const reset = useCallback(() => dispatch({ type: "reset" }), []);
 
   return {
