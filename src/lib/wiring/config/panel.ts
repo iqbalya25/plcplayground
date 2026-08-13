@@ -1,5 +1,6 @@
 import type { ComponentDef, TerminalDef } from "../types";
 import { IMAGE_TERMINALS } from "./terminals.generated";
+import { activeModel, activePlcTerminals } from "./plc-models";
 
 /**
  * Device sizes are proportional to real hardware at PX_PER_MM:
@@ -103,10 +104,10 @@ export const PANEL_COMPONENTS: ComponentDef[] = [
     kind: "image",
     x: PLC_X,
     y: PLC_Y,
-    w: mm(182),
-    h: mm(90),
-    imageSrc: "/images/plc.webp",
-    terminals: imageTerminals("PLC"),
+    w: mm(activeModel().widthMm),
+    h: mm(activeModel().heightMm),
+    imageSrc: activeModel().imageSrc,
+    terminals: activePlcTerminals(),
   },
   ...(
     [
@@ -170,20 +171,14 @@ export const PANEL_COMPONENTS: ComponentDef[] = [
 ];
 
 /** FX3U-48M output common groups (from the terminal strip layout). */
-export const Y_COM_GROUPS: Record<string, string[]> = {
-  COM1: ["Y0", "Y1", "Y2", "Y3"],
-  COM2: ["Y4", "Y5", "Y6", "Y7"],
-  COM3: ["Y10", "Y11", "Y12", "Y13"],
-  COM4: ["Y14", "Y15", "Y16", "Y17"],
-  COM5: ["Y20", "Y21", "Y22", "Y23", "Y24", "Y25", "Y26", "Y27"],
-};
+export const Y_COM_GROUPS: Record<string, string[]> = activeModel().comGroups;
 
 export const BUTTON_KEYS = ["PB1", "PB2", "PB3", "PB4"] as const;
 export const LAMP_KEYS = ["LAMP1", "LAMP2", "LAMP3", "LAMP4"] as const;
 
-export const X_INPUTS = Object.keys(IMAGE_TERMINALS.PLC).filter((t) =>
-  /^X\d+$/.test(t),
-);
-export const Y_OUTPUTS = Object.keys(IMAGE_TERMINALS.PLC).filter((t) =>
-  /^Y\d+$/.test(t),
-);
+export const X_INPUTS = Object.keys(
+  IMAGE_TERMINALS[activeModel().terminalsKey],
+).filter((t) => /^X\d+$/.test(t));
+export const Y_OUTPUTS = Object.keys(
+  IMAGE_TERMINALS[activeModel().terminalsKey],
+).filter((t) => /^Y\d+$/.test(t));

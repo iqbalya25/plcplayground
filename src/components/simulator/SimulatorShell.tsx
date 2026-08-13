@@ -16,6 +16,7 @@ import { WiringCanvas } from "./WiringCanvas";
 import { ChecklistPanel } from "./ChecklistPanel";
 import { MessagePanel, type Message } from "./MessagePanel";
 import { PlcStatusBadge } from "./PlcStatusBadge";
+import { activeModel } from "@/lib/wiring/config/plc-models";
 
 const INITIAL_MESSAGES: Message[] = [
   {
@@ -164,10 +165,9 @@ export function SimulatorShell() {
         </h1>
         <div className="ml-auto flex items-center gap-3">
           <PlcStatusBadge status={plcStatus} />
-          <span className="font-mono text-xs text-ink-dim">
-            SCENARIO 01 · <b className="text-ink">Basic Start-Stop</b> ·
-            Haiwell
-          </span>
+          <span className="ml-auto font-mono text-xs text-ink-dim">
+          PLC_PLayground · <b className="text-ink">Automation</b> · {activeModel().label}
+        </span>
         </div>
       </header>
 
