@@ -8,8 +8,16 @@
     "start": "node index.js",
     "dev": "node --watch index.js"
   },
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "powermeter": "node --watch powermeter.js"
+  },
   "dependencies": {
     "express": "^4.19.2",
     "modbus-serial": "^8.0.17"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6"
   }
 }

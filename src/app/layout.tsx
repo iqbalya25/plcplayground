@@ -1,15 +1,29 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { HeaderStatusProvider } from "@/components/layout/HeaderStatusContext";
+import { Navbar } from "@/components/layout/Navbar";
 
 export const metadata: Metadata = {
-  title: "PLC Playground — Wiring Simulator",
-  description: "Interactive PLC wiring trainer connected to real FX3U hardware",
+  title: "PLC Playground",
+  description:
+    "Interactive PLC training platform — wiring simulator and Modbus power meter playground",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en">
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        <HeaderStatusProvider>
+          <div className="flex h-screen flex-col">
+            <Navbar />
+            <div className="min-h-0 flex-1">{children}</div>
+          </div>
+        </HeaderStatusProvider>
+      </body>
     </html>
   );
 }

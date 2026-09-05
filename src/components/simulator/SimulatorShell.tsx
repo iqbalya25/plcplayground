@@ -17,6 +17,7 @@ import { ChecklistPanel } from "./ChecklistPanel";
 import { MessagePanel, type Message } from "./MessagePanel";
 import { PlcStatusBadge } from "./PlcStatusBadge";
 import { activeModel } from "@/lib/wiring/config/plc-models";
+import { usePublishHeaderStatus } from "../layout/HeaderStatusContext";
 
 const INITIAL_MESSAGES: Message[] = [
   {
@@ -31,6 +32,11 @@ export function SimulatorShell() {
   const plcStatus = usePlcStatus();
   const plcReady = plcStatus === "running";
 
+  usePublishHeaderStatus({
+    label: plcReady ? "PLC Connected" : "Server disconnected",
+    state: plcReady ? "ok" : "error",
+  });
+
   const [hintMessages, setHintMessages] =
     React.useState<Message[]>(INITIAL_MESSAGES);
   const [missTerminals, setMissTerminals] = React.useState<ReadonlySet<string>>(
@@ -44,12 +50,10 @@ export function SimulatorShell() {
   // The backend maps wires -> coils and writes only the diff, so pushing
   // the full list on every add/delete is cheap and keeps relays live.
   React.useEffect(() => {
-    sendWiring(api.wires.map((w) => ({ from: w.from, to: w.to }))).catch(
-      () => {
-        /* bridge unreachable — badge already shows disconnected;
+    sendWiring(api.wires.map((w) => ({ from: w.from, to: w.to }))).catch(() => {
+      /* bridge unreachable — badge already shows disconnected;
            backend re-asserts saved intent on reconnect */
-      },
-    );
+    });
   }, [api.wires]);
 
   const liveMessages = React.useMemo<Message[]>(() => {
@@ -155,22 +159,7 @@ export function SimulatorShell() {
   };
 
   return (
-    <div className="flex h-screen flex-col bg-[#9ea4aa] text-ink">
-      <header className="flex items-center gap-3 border-b-2 border-panel-border bg-panel-box px-4 py-2">
-        <span className="bg-ink px-2 py-1 text-[11px] font-bold tracking-[0.12em] text-white">
-          PLC PLAYGROUND
-        </span>
-        <h1 className="text-[15px] font-bold">
-          Wiring Simulator — Control Panel
-        </h1>
-        <div className="ml-auto flex items-center gap-3">
-          <PlcStatusBadge status={plcStatus} />
-          <span className="ml-auto font-mono text-xs text-ink-dim">
-          PLC_PLayground · <b className="text-ink">Automation</b> · {activeModel().label}
-        </span>
-        </div>
-      </header>
-
+    <div className="flex h-full flex-col bg-[#9ea4aa] text-ink">
       <div className="flex min-h-0 flex-1">
         <div className="relative min-w-0 flex-1">
           <WiringCanvas

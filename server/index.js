@@ -2,9 +2,13 @@
  * index.js — PLC bridge server (Express)
  * ------------------------------------------------------------
  * Endpoints:
- *   POST /wiring  { wires: [{ from, to }, ...] }  -> maps wires to coils, applies diff
- *   POST /reset                                    -> all coils OFF
- *   GET  /status                                   -> { plc, coils }
+ *   POST /wiring                -> maps wires to coils, applies diff (PLC bridge)
+ *   POST /reset                 -> all coils OFF (PLC bridge)
+ *   GET  /status                -> { plc, coils } (PLC bridge)
+ *
+ *   GET  /api/powermeter/state          -> live simulated meter reading
+ *   POST /api/powermeter/motor/:id      -> { running: bool } toggle a motor load
+ *   POST /api/powermeter/reset-energy   -> zero the accumulated kWh
  *
  * The frontend is trusted for this phase: whatever wire list arrives
  * is mapped 1:1 to coils. No answer key lives here yet.
@@ -13,6 +17,10 @@
 
 const express = require("express");
 const plc = require("./modbus-client");
+
+const { PowerMeterEngine } = require("./powermeter/engine");
+const { startPowerMeterModbusServer } = require("./powermeter/modbus-server");
+const { createPowerMeterRouter } = require("./powermeter/routes");
 
 const PORT = Number(process.env.PORT || 4000);
 
@@ -28,8 +36,7 @@ const WIRE_COIL_MAP = [
 function wiresToCoils(wires) {
   const has = (a, b) =>
     wires.some(
-      (w) =>
-        (w.from === a && w.to === b) || (w.from === b && w.to === a),
+      (w) => (w.from === a && w.to === b) || (w.from === b && w.to === a),
     );
 
   const desired = {};
@@ -39,10 +46,21 @@ function wiresToCoils(wires) {
   return desired;
 }
 
+// ---------- power meter simulator ---------------------------------------------
+// Acts as an independent Modbus TCP slave on 192.168.0.50:502 (see
+// register-map.js). Requires that IP to be bound as a secondary address
+// on this machine's NIC — see README for the New-NetIPAddress step.
+
+const powerMeterEngine = new PowerMeterEngine();
+const powerMeterRouter = createPowerMeterRouter(powerMeterEngine);
+let powerMeterModbusServer = null;
+
 // ---------- HTTP server --------------------------------------------------------
 
 const app = express();
 app.use(express.json());
+
+app.use("/api/powermeter", powerMeterRouter);
 
 app.post("/wiring", async (req, res) => {
   const wires = req.body?.wires;
@@ -88,12 +106,23 @@ app.get("/status", (_req, res) => {
 app.listen(PORT, async () => {
   console.log(`[server] PLC bridge listening on http://localhost:${PORT}`);
   await plc.start();
+
+  powerMeterEngine.start();
+  try {
+    powerMeterModbusServer = startPowerMeterModbusServer(powerMeterEngine);
+  } catch (err) {
+    console.error(
+      `[powermeter] failed to start Modbus server — is 192.168.0.50 bound to this NIC? (${err.message})`,
+    );
+  }
 });
 
 // Leave relays OFF on Ctrl+C / docker stop.
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, async () => {
     console.log(`[server] ${signal} — resetting coils and shutting down`);
+    powerMeterEngine.stop();
+    if (powerMeterModbusServer) powerMeterModbusServer.close?.();
     await plc.stop();
     process.exit(0);
   });
