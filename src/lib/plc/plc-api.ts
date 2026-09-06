@@ -20,11 +20,14 @@ export interface PlcResponse {
   error?: string;
 }
 
-export async function sendWiring(wires: WireDTO[], p0: any[]): Promise<PlcResponse> {
+export async function sendWiring(
+  wires: WireDTO[],
+  pressed: string[],
+): Promise<PlcResponse> {
   const res = await fetch("/api/plc/wiring", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ wires }),
+    body: JSON.stringify({ wires, pressed }),
   });
   return res.json();
 }
@@ -34,11 +37,15 @@ export async function resetPlc(): Promise<PlcResponse> {
   return res.json();
 }
 
-export async function powerOn(wires: WireDTO[], hasDanger: boolean, p0: any[]): Promise<PlcResponse> {
+export async function powerOn(
+  wires: WireDTO[],
+  hasDanger: boolean,
+  pressed: string[],
+): Promise<PlcResponse> {
   const res = await fetch("/api/plc/power/on", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ wires, hasDanger }),
+    body: JSON.stringify({ wires, hasDanger, pressed }),
   });
   return res.json();
 }

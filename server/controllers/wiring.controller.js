@@ -20,7 +20,8 @@ exports.postWiring = async (req, res) => {
   if (error) return res.status(400).json({ error });
   const pressed = Array.isArray(req.body?.pressed) ? req.body.pressed : [];
   try {
-    res.json(await service.syncWiring(req.body.wires, pressed));
+    const result = await service.syncWiring(req.body.wires, pressed);
+    res.json(result);
   } catch (err) {
     res
       .status(503)
