@@ -52,8 +52,8 @@ export function SimulatorShell() {
     sendWiring(
       api.wires.map((w) => ({ from: w.from, to: w.to })),
       [...pressedButtons],
-    ).catch(() => {
-      /* bridge unreachable — badge already shows disconnected */
+    ).catch((err) => {
+      console.error("[sendWiring] failed:", err);
     });
   }, [api.wires, pressedButtons, poweredOn]);
 

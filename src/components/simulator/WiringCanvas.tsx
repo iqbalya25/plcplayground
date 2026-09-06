@@ -109,8 +109,9 @@ function ImageComponent({ def }: { def: ComponentDef }) {
 
 /**
  * DeviceBox — renders buttons and lamps.
- * Buttons only: the actuator circle is now pressable (mousedown/mouseup)
- * so the frontend can simulate a physical push while wired live.
+ * Buttons only: the actuator circle is pressable via Pointer Events
+ * (works for mouse, touch, and pen — and setPointerCapture keeps the
+ * "hold" reliable even if the pointer drifts off the circle).
  */
 function DeviceBox({
   def,
@@ -173,20 +174,29 @@ function DeviceBox({
         stroke="#33383d"
         strokeWidth={1.5}
         className={isButton ? "cursor-pointer" : undefined}
-        onMouseDown={
+        style={isButton ? { touchAction: "none" } : undefined}
+        onPointerDown={
           isButton
             ? (e) => {
                 e.stopPropagation();
-                console.log("PRESS:", def.key);
+                e.currentTarget.setPointerCapture(e.pointerId);
                 onPress?.(def.key);
               }
             : undefined
         }
-        onMouseUp={
+        onPointerUp={
           isButton
             ? (e) => {
                 e.stopPropagation();
-                console.log("RELEASE:", def.key);
+                e.currentTarget.releasePointerCapture(e.pointerId);
+                onRelease?.(def.key);
+              }
+            : undefined
+        }
+        onPointerCancel={
+          isButton
+            ? (e) => {
+                e.stopPropagation();
                 onRelease?.(def.key);
               }
             : undefined
@@ -328,11 +338,9 @@ function TerminalDot({
 }
 
 /* ============================================================ */
-/*  MAIN CANVAS — everything below is ONE interface + ONE        */
-/*  function, one after another, never nested.                   */
+/*  MAIN CANVAS — one interface, then one function, in order.    */
 /* ============================================================ */
 
-/* ---------- (A) THE "SPEC SHEET" — no logic, just shapes ---------- */
 export interface WiringCanvasProps {
   api: WiringApi;
   missTerminals: ReadonlySet<string>;
@@ -341,9 +349,7 @@ export interface WiringCanvasProps {
   onPress: (key: string) => void;
   onRelease: (key: string) => void;
 }
-/* ---------- interface WiringCanvasProps ENDS HERE ---------- */
 
-/* ---------- (B) THE ACTUAL COMPONENT — the real code that runs ---------- */
 export function WiringCanvas({
   api,
   missTerminals,
@@ -710,4 +716,3 @@ export function WiringCanvas({
     </>
   );
 }
-/* ---------- function WiringCanvas ENDS HERE (end of file) ---------- */

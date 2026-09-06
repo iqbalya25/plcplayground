@@ -18,8 +18,9 @@ function validateWires(wires) {
 exports.postWiring = async (req, res) => {
   const error = validateWires(req.body?.wires);
   if (error) return res.status(400).json({ error });
+  const pressed = Array.isArray(req.body?.pressed) ? req.body.pressed : [];
   try {
-    res.json(await service.syncWiring(req.body.wires));
+    res.json(await service.syncWiring(req.body.wires, pressed));
   } catch (err) {
     res
       .status(503)
@@ -30,9 +31,14 @@ exports.postWiring = async (req, res) => {
 exports.postPowerOn = async (req, res) => {
   const error = validateWires(req.body?.wires);
   if (error) return res.status(400).json({ error });
+  const pressed = Array.isArray(req.body?.pressed) ? req.body.pressed : [];
   try {
     res.json(
-      await service.powerOn(req.body.wires, Boolean(req.body?.hasDanger)),
+      await service.powerOn(
+        req.body.wires,
+        Boolean(req.body?.hasDanger),
+        pressed,
+      ),
     );
   } catch (err) {
     res.status(err.status || 503).json({ ok: false, error: err.message });

@@ -8,7 +8,6 @@ const BUTTON_CONTACTS = {
   PB3: ["13", "14"],
   PB4: ["21", "22"],
 };
-
 const BUTTON_TYPES = { PB1: "NO", PB2: "NO", PB3: "NO", PB4: "NC" };
 
 /* ---------- L & N: single relay ------------------------------------------ */
@@ -16,13 +15,11 @@ const LN_REQUIREMENTS = [
   { a: "MCB.L1_OUT", b: "PLC.L" },
   { a: "MCB.L2_OUT", b: "PLC.N" },
 ];
-const MAIN_POWER_COIL = 3072;
+const MAIN_POWER_COIL = 3072; // M0
 
-/* ---------- input-common + per-input monitor coils ----------------------- */
-const SS_COIL = 3122; // M0 — S/S wired to 0V
-const WIRING_COILS = { X0: 3073, X1: 3074 };
-
-const PRESS_COILS = { X0: 3123, X1: 3124 };
+const SS_COIL = 3122; // M50 — S/S wired to 0V
+const WIRING_COILS = { X0: 3073, X1: 3074 }; // M1, M2 — wiring correctness
+const PRESS_COILS = { X0: 3123, X1: 3124 }; // M51, M52 — simulated press
 
 let poweredOn = false;
 
@@ -52,75 +49,6 @@ function buildConnectivity(wires) {
       return find(a) === find(b);
     },
   };
-}
-
-function isInputReady(conn, xAddr) {
-  const plcTerm = `PLC.${xAddr}`;
-  const on24 = (t) =>
-    conn.connected(t, "PSU.24VDC") || conn.connected(t, "TB24");
-
-  for (const [key, [pinA, pinB]] of Object.entries(BUTTON_CONTACTS)) {
-    const t1 = `${key}.${pinA}`;
-    const t2 = `${key}.${pinB}`;
-    if (conn.connected(t1, plcTerm) && on24(t2)) return true;
-    if (conn.connected(t2, plcTerm) && on24(t1)) return true;
-  }
-  return false;
-}
-
-function wiresToCoils(wires) {
-  const conn = buildConnectivity(wires);
-  const desired = {};
-
-  desired[MAIN_POWER_COIL] = LN_REQUIREMENTS.every(({ a, b }) =>
-    conn.connected(a, b),
-  );
-
-  desired[SS_COIL] =
-    conn.connected("PLC.S/S", "PSU.0VDC") || conn.connected("PLC.S/S", "TB0");
-
-  for (const [xAddr, coil] of Object.entries(INPUT_COILS)) {
-    desired[coil] = isInputReady(conn, xAddr);
-  }
-
-  return desired;
-}
-
-async function syncWiring(wires) {
-  if (!poweredOn) return { ok: true, poweredOn: false, ...plc.getStatus() };
-  const desired = wiresToCoils(wires);
-  await plc.applyState(desired);
-  return { ok: true, poweredOn: true, applied: desired, ...plc.getStatus() };
-}
-
-async function powerOn(wires, hasDanger) {
-  if (hasDanger) {
-    const err = new Error(
-      "Cannot power on — dangerous wiring detected (short circuit / cross-voltage).",
-    );
-    err.status = 409;
-    throw err;
-  }
-  poweredOn = true;
-  const desired = wiresToCoils(wires);
-  await plc.applyState(desired);
-  return { ok: true, poweredOn, applied: desired, ...plc.getStatus() };
-}
-
-async function powerOff() {
-  poweredOn = false;
-  await plc.resetAll();
-  return { ok: true, poweredOn, ...plc.getStatus() };
-}
-
-async function resetAll() {
-  poweredOn = false;
-  await plc.resetAll();
-  return { ok: true, poweredOn, ...plc.getStatus() };
-}
-
-function getStatus() {
-  return { poweredOn, ...plc.getStatus() };
 }
 
 function contactClosed(key, pressed) {
@@ -172,6 +100,43 @@ function wiresToCoils(wires, pressed = []) {
   }
 
   return desired;
+}
+
+async function syncWiring(wires, pressed = []) {
+  if (!poweredOn) return { ok: true, poweredOn: false, ...plc.getStatus() };
+  const desired = wiresToCoils(wires, pressed);
+  await plc.applyState(desired);
+  return { ok: true, poweredOn: true, applied: desired, ...plc.getStatus() };
+}
+
+async function powerOn(wires, hasDanger, pressed = []) {
+  if (hasDanger) {
+    const err = new Error(
+      "Cannot power on — dangerous wiring detected (short circuit / cross-voltage).",
+    );
+    err.status = 409;
+    throw err;
+  }
+  poweredOn = true;
+  const desired = wiresToCoils(wires, pressed);
+  await plc.applyState(desired);
+  return { ok: true, poweredOn, applied: desired, ...plc.getStatus() };
+}
+
+async function powerOff() {
+  poweredOn = false;
+  await plc.resetAll();
+  return { ok: true, poweredOn, ...plc.getStatus() };
+}
+
+async function resetAll() {
+  poweredOn = false;
+  await plc.resetAll();
+  return { ok: true, poweredOn, ...plc.getStatus() };
+}
+
+function getStatus() {
+  return { poweredOn, ...plc.getStatus() };
 }
 
 module.exports = { syncWiring, powerOn, powerOff, resetAll, getStatus };
