@@ -11,34 +11,34 @@ import {
 } from "@/lib/wiring/engine/feedback";
 import { PANEL_COMPONENTS } from "@/lib/wiring/config/panel";
 import { usePlcStatus } from "@/lib/plc/use-plc-status";
-import { sendWiring, resetPlc } from "@/lib/plc/plc-api";
+import { sendWiring, resetPlc, powerOff, powerOn } from "@/lib/plc/plc-api";
 import { WiringCanvas } from "./WiringCanvas";
 import { ChecklistPanel } from "./ChecklistPanel";
 import { MessagePanel, type Message } from "./MessagePanel";
-import { PlcStatusBadge } from "./PlcStatusBadge";
-import { activeModel } from "@/lib/wiring/config/plc-models";
 import { usePublishHeaderStatus } from "../layout/HeaderStatusContext";
-
-const INITIAL_MESSAGES: Message[] = [
-  {
-    kind: "dim",
-    text: "// MCB input is pre-wired to 220VAC. Start from MCB L1/L2 OUT. Correct wires turn green automatically — buttons and lamps may use any free X / Y address.",
-  },
-];
+import { translateMessage, translateTask } from "@/lib/i18n/messages";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 
 export function SimulatorShell() {
   const api = useWiring();
   const { evaluation } = api;
   const plcStatus = usePlcStatus();
   const plcReady = plcStatus === "running";
+  const { lang } = useLanguage();
+
+  const [poweredOn, setPoweredOn] = React.useState(false);
+  const [pressedButtons, setPressedButtons] = React.useState<
+    ReadonlySet<string>
+  >(new Set());
 
   usePublishHeaderStatus({
     label: plcReady ? "PLC Connected" : "Server disconnected",
     state: plcReady ? "ok" : "error",
   });
 
-  const [hintMessages, setHintMessages] =
-    React.useState<Message[]>(INITIAL_MESSAGES);
+  const [hintMessages, setHintMessages] = React.useState<Message[]>([
+    { kind: "dim", text: translateMessage("initial-hint", lang) },
+  ]);
   const [missTerminals, setMissTerminals] = React.useState<ReadonlySet<string>>(
     new Set(),
   );
@@ -46,55 +46,76 @@ export function SimulatorShell() {
     new Set(),
   );
 
-  /* ---------- PLC sync: push wire list on every change ---------- */
-  // The backend maps wires -> coils and writes only the diff, so pushing
-  // the full list on every add/delete is cheap and keeps relays live.
+  /* ---------- PLC sync: push wiring + button state, only while powered on ---------- */
   React.useEffect(() => {
-    sendWiring(api.wires.map((w) => ({ from: w.from, to: w.to }))).catch(() => {
-      /* bridge unreachable — badge already shows disconnected;
-           backend re-asserts saved intent on reconnect */
+    if (!poweredOn) return;
+    sendWiring(
+      api.wires.map((w) => ({ from: w.from, to: w.to })),
+      [...pressedButtons],
+    ).catch(() => {
+      /* bridge unreachable — badge already shows disconnected */
     });
-  }, [api.wires]);
+  }, [api.wires, pressedButtons, poweredOn]);
 
   const liveMessages = React.useMemo<Message[]>(() => {
     if (evaluation.dangers.length > 0) {
-      return evaluation.dangers.map((d) => ({ kind: "err", text: d.message }));
+      return evaluation.dangers.map((d) => ({
+        kind: "err",
+        text: translateMessage(d.messageKey, lang),
+      }));
     }
     if (evaluation.complete) {
       return [
         {
           kind: "ok",
-          text: plcReady
-            ? "✅ All connections correct. Physical relays energized on the PLC."
-            : "✅ All connections correct — relays will energize when the PLC reconnects.",
+          text: translateMessage(
+            plcReady ? "all-correct-live" : "all-correct-pending",
+            lang,
+          ),
         },
       ];
     }
     if (plcStatus === "disconnected") {
       return [
-        {
-          kind: "warn",
-          text: "⚠ Server disconnected — wiring is saved and will be applied to the hardware automatically on reconnect.",
-        },
+        { kind: "warn", text: translateMessage("server-disconnected", lang) },
         ...hintMessages,
       ];
     }
     if (plcStatus === "stopped") {
       return [
-        {
-          kind: "warn",
-          text: "⚠ PLC is in STOP mode — switch it to RUN for outputs to respond.",
-        },
+        { kind: "warn", text: translateMessage("plc-stopped", lang) },
         ...hintMessages,
       ];
     }
     return hintMessages;
-  }, [evaluation, hintMessages, plcStatus, plcReady]);
+  }, [evaluation, hintMessages, plcStatus, plcReady, lang]);
 
-  React.useEffect(() => {
-    setMissTerminals(new Set());
-    setBadWireIds(new Set());
-  }, [api.wires]);
+  async function handleTogglePower() {
+    if (poweredOn) {
+      setPoweredOn(false);
+      powerOff().catch(() => {});
+      return;
+    }
+
+    const hasDanger = evaluation.dangers.length > 0;
+    const result = await powerOn(
+      api.wires.map((w) => ({ from: w.from, to: w.to })),
+      hasDanger,
+      [...pressedButtons],
+    ).catch(() => null);
+
+    if (result?.ok) {
+      setPoweredOn(true);
+    } else {
+      setHintMessages([
+        {
+          kind: "err",
+          text:
+            result?.error ?? "❌ Cannot power on — fix wiring errors first.",
+        },
+      ]);
+    }
+  }
 
   const runHint = () => {
     const msgs: Message[] = [];
@@ -102,13 +123,17 @@ export function SimulatorShell() {
     const bad = new Set<string>();
 
     evaluation.tasks.forEach((t, i) => {
-      if (!t.done) msgs.push({ kind: "warn", text: `◌ ${i + 1}. ${t.label}` });
+      if (!t.done)
+        msgs.push({
+          kind: "warn",
+          text: `◌ ${i + 1}. ${translateTask(t, lang)}`,
+        });
     });
     for (const w of api.wires) {
       if (evaluation.okWireIds.has(w.id)) continue;
-      const danger = dangerCheck(w.from, w.to);
-      if (danger) {
-        msgs.push({ kind: "err", text: danger });
+      const dangerKey = dangerCheck(w.from, w.to);
+      if (dangerKey) {
+        msgs.push({ kind: "err", text: translateMessage(dangerKey, lang) });
         continue;
       }
       bad.add(w.id);
@@ -122,20 +147,25 @@ export function SimulatorShell() {
             : null;
         })
         .find(Boolean);
-      const lesson = wrongContact ?? polarityCheck(w.from, w.to);
-      msgs.push({
-        kind: "err",
-        text:
-          lesson ??
-          `❌ ${w.from} → ${w.to} is not part of this circuit. Trace the current path: where must this signal come from?`,
-      });
+      const polarityKey = polarityCheck(w.from, w.to);
+      const text = wrongContact
+        ? translateMessage(wrongContact.key, lang, {
+            btn: wrongContact.buttonKey,
+          })
+        : polarityKey
+          ? translateMessage(polarityKey, lang)
+          : translateMessage("not-part-of-circuit", lang, {
+              from: w.from,
+              to: w.to,
+            });
+      msgs.push({ kind: "err", text });
       miss.add(w.from);
       miss.add(w.to);
     }
     if (msgs.length === 0) {
       msgs.push({
         kind: "ok",
-        text: "✅ Everything wired so far is correct — nothing missing.",
+        text: translateMessage("everything-correct-so-far", lang),
       });
     }
     setHintMessages(msgs);
@@ -145,18 +175,31 @@ export function SimulatorShell() {
 
   const resetAll = () => {
     api.reset();
-    // Hardware reset: all coils OFF. (The wires effect will also push an
-    // empty list, but calling resetPlc() makes the intent explicit and
-    // works even if the wire list was already empty.)
-    resetPlc().catch(() => {
-      /* bridge unreachable — reset intent is saved server-side on reconnect */
-    });
+    setPoweredOn(false);
+    resetPlc().catch(() => {});
     setHintMessages([
-      { kind: "dim", text: "// Panel reset. Start from MCB L1/L2 OUT." },
+      { kind: "dim", text: translateMessage("panel-reset", lang) },
     ]);
     setMissTerminals(new Set());
     setBadWireIds(new Set());
   };
+
+  const handlePress = React.useCallback((key: string) => {
+    setPressedButtons((prev) => new Set(prev).add(key));
+  }, []);
+  const handleRelease = React.useCallback((key: string) => {
+    setPressedButtons((prev) => {
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
+  }, []);
+  // Safety net: kalau mouse dilepas di luar tombol (drag keluar area), tetap terlepas.
+  React.useEffect(() => {
+    const up = () => setPressedButtons(new Set());
+    window.addEventListener("mouseup", up);
+    return () => window.removeEventListener("mouseup", up);
+  }, []);
 
   return (
     <div className="flex h-full flex-col bg-[#9ea4aa] text-ink">
@@ -166,6 +209,9 @@ export function SimulatorShell() {
             api={api}
             missTerminals={missTerminals}
             badWireIds={badWireIds}
+            pressed={pressedButtons}
+            onPress={handlePress}
+            onRelease={handleRelease}
           />
           {evaluation.complete && (
             <div className="absolute left-1/2 top-4 -translate-x-1/2 border-2 border-ok bg-[#dcefe1] px-5 py-2 text-sm font-bold text-[#14532d]">
@@ -209,7 +255,15 @@ export function SimulatorShell() {
       */}
       <footer className="flex h-[132px] shrink-0 items-stretch gap-3 border-t-2 border-panel-border bg-panel-muted px-4 py-2.5">
         <div className="flex flex-col gap-2">
-          <Button onClick={runHint}>VALIDATE (HINT)</Button>
+          <Button
+            onClick={handleTogglePower}
+            variant={poweredOn ? "default" : "secondary"}
+          >
+            {poweredOn ? "POWER OFF" : "POWER ON"}
+          </Button>
+          <Button onClick={runHint}>
+            {lang === "en" ? "VALIDATE (HINT)" : "VALIDASI (BANTUAN)"}
+          </Button>
           <Button variant="secondary" onClick={resetAll}>
             RESET
           </Button>
@@ -219,7 +273,7 @@ export function SimulatorShell() {
               size="sm"
               onClick={() => api.deleteWire(api.selectedWireId!)}
             >
-              DELETE WIRE
+              {lang === "en" ? "DELETE WIRE" : "HAPUS KABEL"}
             </Button>
           )}
         </div>

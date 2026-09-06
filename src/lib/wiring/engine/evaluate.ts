@@ -40,8 +40,8 @@ export function evaluate(wires: readonly Wire[]): EvalResult {
   const assignments: Record<string, string> = {};
 
   const dangers = wires.flatMap((w) => {
-    const msg = dangerCheck(w.from, w.to);
-    return msg ? [{ wireId: w.id, message: msg }] : [];
+    const key = dangerCheck(w.from, w.to);
+    return key ? [{ wireId: w.id, messageKey: key }] : [];
   });
 
   /* ---------- source nets --------------------------------------- */
@@ -61,13 +61,37 @@ export function evaluate(wires: readonly Wire[]): EvalResult {
   };
 
   /* ---------- fixed infrastructure (any path accepted) ----------- */
-  netTask("ac-plc-l", "PLC power — PLC L on the L line (from MCB L1 OUT)", onL("PLC.L"));
-  netTask("ac-plc-n", "PLC power — PLC N on the N line (from MCB L2 OUT)", onN("PLC.N"));
-  netTask("ac-psu-l", "Power supply input — PSU L on the L line", onL("PSU.L_IN"));
-  netTask("ac-psu-n", "Power supply input — PSU N on the N line", onN("PSU.N_IN"));
-  netTask("dist-24", "24V distribution — PSU +V → +24V block", conn.connected("PSU.24VDC", "TB24"));
-  netTask("dist-0", "0V distribution — PSU −V → 0V block", conn.connected("PSU.0VDC", "TB0"));
-  netTask("ss", "Input common — S/S on the 24V net", on24V("PLC.S/S"));
+  netTask(
+    "ac-plc-l",
+    "PLC power — PLC L on the L line (from MCB L1 OUT)",
+    onL("PLC.L"),
+  );
+  netTask(
+    "ac-plc-n",
+    "PLC power — PLC N on the N line (from MCB L2 OUT)",
+    onN("PLC.N"),
+  );
+  netTask(
+    "ac-psu-l",
+    "Power supply input — PSU L on the L line",
+    onL("PSU.L_IN"),
+  );
+  netTask(
+    "ac-psu-n",
+    "Power supply input — PSU N on the N line",
+    onN("PSU.N_IN"),
+  );
+  netTask(
+    "dist-24",
+    "24V distribution — PSU +V → +24V block",
+    conn.connected("PSU.24VDC", "TB24"),
+  );
+  netTask(
+    "dist-0",
+    "0V distribution — PSU −V → 0V block",
+    conn.connected("PSU.0VDC", "TB0"),
+  );
+  netTask("ss", "Input common — S/S on the 0V net", on0V("PLC.S/S"));
 
   /* ---------- buttons: free X address, supply from anywhere on 0V - */
   const claimedX = new Set<string>();
@@ -83,8 +107,8 @@ export function evaluate(wires: readonly Wire[]): EvalResult {
     const bypassed = conn.connected(t1, t2);
     if (bypassed) bypassedDevices.add(key);
 
-    const s1 = on0V(t1);
-    const s2 = on0V(t2);
+    const s1 = on24V(t1);
+    const s2 = on24V(t2);
     const supplyDone = (s1 || s2) && !bypassed;
 
     // Signal side: the OTHER contact terminal reaching any free X input.
@@ -109,7 +133,7 @@ export function evaluate(wires: readonly Wire[]): EvalResult {
 
     tasks.push({
       id: `${key}-supply`,
-      label: `${key} supply — 0V (block, PSU, or jumper) → ${type} contact (${pair.join("/")})`,
+      label: `${key} supply — 24V (block, PSU, or jumper) → ${type} contact (${pair.join("/")})`,
       done: supplyDone,
     });
     tasks.push({
@@ -202,14 +226,17 @@ export function evaluate(wires: readonly Wire[]): EvalResult {
   };
 
   const carrier0V = (t: string): boolean => {
-    if (net(t) === "TB0" || t === "PSU.0VDC" || /^PLC\.COM\d+$/.test(t)) return true;
-    const dev = deviceOf(t);
-    return /^PB\d+$/.test(dev) && !bypassedDevices.has(dev) && supplyTermsOf(dev).includes(t);
+    return net(t) === "TB0" || t === "PSU.0VDC" || /^PLC\.COM\d+$/.test(t);
   };
-  const carrier24V = (t: string): boolean => {
+
+  const carrier24V = (t: string) => {
     if (net(t) === "TB24" || t === "PSU.24VDC" || t === "PLC.S/S") return true;
     const dev = deviceOf(t);
-    return /^LAMP\d+$/.test(dev) && !bypassedDevices.has(dev) && supplyTermsOf(dev).includes(t);
+    return (
+      (/^LAMP\d+$/.test(dev) || /^PB\d+$/.test(dev)) &&
+      !bypassedDevices.has(dev) &&
+      supplyTermsOf(dev).includes(t)
+    );
   };
   const carrierL = (t: string): boolean =>
     t === "MCB.L1_OUT" || t === "PSU.L_IN" || t === "PLC.L";

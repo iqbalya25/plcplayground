@@ -27,7 +27,7 @@ const MODBUS_TIMEOUT_MS = 2000;
 
 // Every playground coil the backend is allowed to touch.
 // Add new relay coils here as scenarios grow.
-const PLAYGROUND_COILS = [3072, 3073]; // 0x0C00, 0x0C01
+const PLAYGROUND_COILS = [3072, 3122, 3073, 3074, 3123, 3124];
 
 // ---------- internal state ---------------------------------------------------
 

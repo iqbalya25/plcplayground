@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { HeaderStatusProvider } from "@/components/layout/HeaderStatusContext";
 import { Navbar } from "@/components/layout/Navbar";
+import { LanguageProvider } from "@/lib/i18n/LanguageContext";
 
 export const metadata: Metadata = {
   title: "PLC Playground",
@@ -17,12 +18,14 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased">
-        <HeaderStatusProvider>
-          <div className="flex h-screen flex-col">
-            <Navbar />
-            <div className="min-h-0 flex-1">{children}</div>
-          </div>
-        </HeaderStatusProvider>
+        <LanguageProvider>
+          <HeaderStatusProvider>
+            <div className="flex h-screen flex-col">
+              <Navbar />
+              <div className="min-h-0 flex-1">{children}</div>
+            </div>
+          </HeaderStatusProvider>
+        </LanguageProvider>
       </body>
     </html>
   );

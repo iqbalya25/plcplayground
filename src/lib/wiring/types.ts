@@ -56,7 +56,7 @@ export interface TaskResult {
 
 export interface DangerHit {
   wireId: string;
-  message: string;
+  messageKey: string; // dulu: message: string
 }
 
 export interface EvalResult {

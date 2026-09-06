@@ -107,9 +107,25 @@ function ImageComponent({ def }: { def: ComponentDef }) {
   );
 }
 
-function DeviceBox({ def }: { def: ComponentDef }) {
+/**
+ * DeviceBox — renders buttons and lamps.
+ * Buttons only: the actuator circle is now pressable (mousedown/mouseup)
+ * so the frontend can simulate a physical push while wired live.
+ */
+function DeviceBox({
+  def,
+  pressed,
+  onPress,
+  onRelease,
+}: {
+  def: ComponentDef;
+  pressed?: boolean;
+  onPress?: (key: string) => void;
+  onRelease?: (key: string) => void;
+}) {
   const cx = def.x + def.w / 2;
   const actuatorY = def.kind === "lamp" ? def.y + def.h - 42 : def.y + 62;
+  const isButton = def.kind === "button";
   return (
     <g>
       <rect
@@ -152,10 +168,29 @@ function DeviceBox({ def }: { def: ComponentDef }) {
       <circle
         cx={cx}
         cy={actuatorY}
-        r={15}
+        r={isButton && pressed ? 12 : 15}
         fill={def.kind === "lamp" ? "#fff3cd" : def.accent}
         stroke="#33383d"
         strokeWidth={1.5}
+        className={isButton ? "cursor-pointer" : undefined}
+        onMouseDown={
+          isButton
+            ? (e) => {
+                e.stopPropagation();
+                console.log("PRESS:", def.key);
+                onPress?.(def.key);
+              }
+            : undefined
+        }
+        onMouseUp={
+          isButton
+            ? (e) => {
+                e.stopPropagation();
+                console.log("RELEASE:", def.key);
+                onRelease?.(def.key);
+              }
+            : undefined
+        }
       />
       {def.kind === "lamp" && (
         <circle cx={cx} cy={actuatorY} r={8} fill={def.accent} />
@@ -292,18 +327,30 @@ function TerminalDot({
   );
 }
 
-/* ---------- main canvas ---------- */
+/* ============================================================ */
+/*  MAIN CANVAS — everything below is ONE interface + ONE        */
+/*  function, one after another, never nested.                   */
+/* ============================================================ */
 
+/* ---------- (A) THE "SPEC SHEET" — no logic, just shapes ---------- */
 export interface WiringCanvasProps {
   api: WiringApi;
   missTerminals: ReadonlySet<string>;
   badWireIds: ReadonlySet<string>;
+  pressed: ReadonlySet<string>;
+  onPress: (key: string) => void;
+  onRelease: (key: string) => void;
 }
+/* ---------- interface WiringCanvasProps ENDS HERE ---------- */
 
+/* ---------- (B) THE ACTUAL COMPONENT — the real code that runs ---------- */
 export function WiringCanvas({
   api,
   missTerminals,
   badWireIds,
+  pressed,
+  onPress,
+  onRelease,
 }: WiringCanvasProps) {
   const svgRef = React.useRef<SVGSVGElement>(null);
   const [cursor, setCursor] = React.useState<Point | null>(null);
@@ -488,7 +535,15 @@ export function WiringCanvas({
           if (c.kind === "image") return <ImageComponent key={c.key} def={c} />;
           if (c.kind === "terminalBlock")
             return <TerminalBlock key={c.key} def={c} />;
-          return <DeviceBox key={c.key} def={c} />;
+          return (
+            <DeviceBox
+              key={c.key}
+              def={c}
+              pressed={c.kind === "button" ? pressed.has(c.key) : undefined}
+              onPress={onPress}
+              onRelease={onRelease}
+            />
+          );
         })}
 
         <g>
@@ -655,3 +710,4 @@ export function WiringCanvas({
     </>
   );
 }
+/* ---------- function WiringCanvas ENDS HERE (end of file) ---------- */

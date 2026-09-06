@@ -5,13 +5,18 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { EvalResult } from "@/lib/wiring/types";
+import { translateTask } from "@/lib/i18n/messages";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 
 export function ChecklistPanel({ evaluation }: { evaluation: EvalResult }) {
+  const { lang } = useLanguage();
   const done = evaluation.tasks.filter((t) => t.done).length;
   return (
     <Card className="flex min-h-0 flex-1 flex-col">
       <CardHeader className="flex-row items-center justify-between space-y-0">
-        <CardTitle>Wiring checklist</CardTitle>
+        <CardTitle>
+          {lang === "en" ? "Wiring checklist" : "Checklist wiring"}
+        </CardTitle>
         <Badge variant={done === evaluation.tasks.length ? "ok" : "muted"}>
           {done}/{evaluation.tasks.length}
         </Badge>
@@ -27,7 +32,12 @@ export function ChecklistPanel({ evaluation }: { evaluation: EvalResult }) {
                   t.done && "border-ok bg-[#dcefe1] text-[#14532d]",
                 )}
               >
-                <span className={cn("min-w-[20px] font-mono font-bold text-[#8a9096]", t.done && "text-ok")}>
+                <span
+                  className={cn(
+                    "min-w-[20px] font-mono font-bold text-[#8a9096]",
+                    t.done && "text-ok",
+                  )}
+                >
                   {i + 1}.
                 </span>
                 <span
@@ -39,7 +49,7 @@ export function ChecklistPanel({ evaluation }: { evaluation: EvalResult }) {
                   {t.done ? "✓" : ""}
                 </span>
                 <span>
-                  {t.label}
+                  {translateTask(t, lang)}
                   {t.detail && <b className="ml-1 font-mono">{t.detail}</b>}
                 </span>
               </li>

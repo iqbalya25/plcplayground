@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useHeaderStatus } from "./HeaderStatusContext";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 
 const TABS = [
   { href: "/", label: "Wiring Simulator" },
@@ -21,6 +22,7 @@ const STATUS_STYLES: Record<string, string> = {
 export function Navbar() {
   const pathname = usePathname();
   const status = useHeaderStatus();
+  const { lang, setLang } = useLanguage();
 
   return (
     <header className="flex shrink-0 items-center gap-3 border-b-2 border-panel-border bg-panel-box px-4 py-2">
@@ -37,7 +39,9 @@ export function Navbar() {
               href={tab.href}
               className={cn(
                 "px-3 py-1.5 text-[13px] font-bold",
-                active ? "border-b-2 border-ink text-ink" : "text-ink-dim hover:text-ink",
+                active
+                  ? "border-b-2 border-ink text-ink"
+                  : "text-ink-dim hover:text-ink",
               )}
             >
               {tab.label}
@@ -55,6 +59,12 @@ export function Navbar() {
         <span className="h-1.5 w-1.5 rounded-full bg-current" />
         {status.label}
       </div>
+      <button
+        onClick={() => setLang(lang === "en" ? "id" : "en")}
+        className="border border-panel-border px-2 py-1 text-xs font-bold uppercase"
+      >
+        {lang === "en" ? "🇬🇧 EN" : "🇮🇩 ID"}
+      </button>
     </header>
   );
 }
