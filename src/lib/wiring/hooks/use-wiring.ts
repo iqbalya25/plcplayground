@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useReducer, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
 import type { Point, TerminalId, Wire } from "../types";
 import { evaluate } from "../engine/evaluate";
 
@@ -35,10 +35,40 @@ type Action =
   | { type: "selectWire"; id: string | null }
   | { type: "deleteWire"; id: string }
   | { type: "recolorWire"; id: string; color: string }
+  | { type: "hydrate"; wires: Wire[] }
   | { type: "reset" };
 
 let wireSeq = 0;
 const nextWireId = () => `w${++wireSeq}`;
+
+const STORAGE_KEY = "plc-playground-wiring-v1";
+
+function loadWires(): Wire[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+
+    // Keep the ID counter ahead of the highest saved ID ("w7" -> 7),
+    // otherwise the next new wire would reuse "w1" and collide.
+    for (const w of parsed) {
+      const n = Number(String(w?.id).slice(1));
+      if (Number.isFinite(n) && n > wireSeq) wireSeq = n;
+    }
+    return parsed as Wire[];
+  } catch {
+    return []; // storage blocked or corrupted JSON
+  }
+}
+
+function saveWires(wires: Wire[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(wires));
+  } catch {
+    // storage full or blocked, not critical, ignore
+  }
+}
 
 function reducer(state: WiringState, action: Action): WiringState {
   switch (action.type) {
@@ -87,6 +117,8 @@ function reducer(state: WiringState, action: Action): WiringState {
           w.id === action.id ? { ...w, color: action.color } : w,
         ),
       };
+    case "hydrate":
+      return { ...state, wires: action.wires };
     case "reset":
       return { wires: [], draft: null, selectedWireId: null };
     default:
@@ -101,10 +133,17 @@ export function useWiring() {
     selectedWireId: null,
   });
 
-  /**
-   * Sticky drawing color: stays until the user picks another swatch.
-   * Picking a swatch while a wire is selected also recolors that wire.
-   */
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    dispatch({ type: "hydrate", wires: loadWires() });
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (hydrated) saveWires(state.wires);
+  }, [hydrated, state.wires]);
+
   const [drawColor, setDrawColorState] = useState<string>(DEFAULT_CABLE_COLOR);
 
   const evaluation = useMemo(() => evaluate(state.wires), [state.wires]);
