@@ -52,12 +52,13 @@ const NC_BUTTON_TERMINALS: TerminalDef[] = [
 interface ButtonCapPos {
   xPct: number;
   yPct: number;
-  rPct: number;
+  rxPct: number; // horizontal radius, % of button width
+  ryPct: number; // vertical radius, % of button height
 }
 
 export const BUTTON_CAP: Record<string, ButtonCapPos> = {
-  "/images/PBNO.webp": { xPct: 83, yPct: 50, rPct: 11 },
-  "/images/PBNC.webp": { xPct: 83, yPct: 50, rPct: 11 },
+  "/images/PBNO.webp": { xPct: 88, yPct: 52, rxPct: 14, ryPct: 24 },
+  "/images/PBNC.webp": { xPct: 88, yPct: 52, rxPct: 14, ryPct: 24 },
 };
 /** Lamp: X1/X2 element terminals + two spares (not internally connected). */
 const lampTerminals: TerminalDef[] = (

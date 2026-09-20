@@ -118,13 +118,15 @@ function PressableImage({
   onRelease?: (key: string) => void;
 }) {
   const cap = BUTTON_CAP[def.imageSrc ?? ""] ?? {
-    xPct: 83,
-    yPct: 50,
-    rPct: 11,
+    xPct: 88,
+    yPct: 52,
+    rxPct: 14,
+    ryPct: 30,
   };
   const capX = def.x + (def.w * cap.xPct) / 100;
   const capY = def.y + (def.h * cap.yPct) / 100;
-  const capR = (def.w * cap.rPct) / 100;
+  const capRx = (def.w * cap.rxPct) / 100;
+  const capRy = (def.h * cap.ryPct) / 100;
 
   return (
     <g>
@@ -136,10 +138,11 @@ function PressableImage({
         height={def.h}
         preserveAspectRatio="none"
       />
-      <circle
+      <ellipse
         cx={capX}
         cy={capY}
-        r={capR}
+        rx={capRx}
+        ry={capRy}
         fill="transparent"
         className="cursor-pointer"
         style={{ touchAction: "none" }}
