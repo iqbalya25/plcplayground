@@ -4,11 +4,7 @@ import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useWiring } from "@/lib/wiring/hooks/use-wiring";
-import {
-  contactLesson,
-  dangerCheck,
-  polarityCheck,
-} from "@/lib/wiring/engine/feedback";
+import { dangerCheck, polarityCheck } from "@/lib/wiring/engine/feedback";
 import { PANEL_COMPONENTS } from "@/lib/wiring/config/panel";
 import { usePlcStatus } from "@/lib/plc/use-plc-status";
 import { sendWiring, resetPlc, powerOff, powerOn } from "@/lib/plc/plc-api";
@@ -137,27 +133,13 @@ export function SimulatorShell() {
         continue;
       }
       bad.add(w.id);
-      const wrongContact = [w.from, w.to]
-        .map((term) => {
-          const m = /^(PB\d)\.(1[34]|2[12])$/.exec(term);
-          if (!m) return null;
-          const def = PANEL_COMPONENTS.find((c) => c.key === m[1]);
-          return def?.contactType
-            ? contactLesson(m[1], def.contactType, m[2])
-            : null;
-        })
-        .find(Boolean);
       const polarityKey = polarityCheck(w.from, w.to);
-      const text = wrongContact
-        ? translateMessage(wrongContact.key, lang, {
-            btn: wrongContact.buttonKey,
-          })
-        : polarityKey
-          ? translateMessage(polarityKey, lang)
-          : translateMessage("not-part-of-circuit", lang, {
-              from: w.from,
-              to: w.to,
-            });
+      const text = polarityKey
+        ? translateMessage(polarityKey, lang)
+        : translateMessage("not-part-of-circuit", lang, {
+            from: w.from,
+            to: w.to,
+          });
       msgs.push({ kind: "err", text });
       miss.add(w.from);
       miss.add(w.to);

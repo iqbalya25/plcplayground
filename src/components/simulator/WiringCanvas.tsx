@@ -6,6 +6,7 @@ import {
   CANVAS_H,
   CANVAS_W,
   PANEL_COMPONENTS,
+  BUTTON_CAP,
 } from "@/lib/wiring/config/panel";
 import { dangerCheck } from "@/lib/wiring/engine/feedback";
 import { CABLE_COLORS } from "@/lib/wiring/hooks/use-wiring";
@@ -107,26 +108,63 @@ function ImageComponent({ def }: { def: ComponentDef }) {
   );
 }
 
-/**
- * DeviceBox — renders buttons and lamps.
- * Buttons only: the actuator circle is pressable via Pointer Events
- * (works for mouse, touch, and pen — and setPointerCapture keeps the
- * "hold" reliable even if the pointer drifts off the circle).
- */
-function DeviceBox({
+function PressableImage({
   def,
-  pressed,
   onPress,
   onRelease,
 }: {
   def: ComponentDef;
-  pressed?: boolean;
   onPress?: (key: string) => void;
   onRelease?: (key: string) => void;
 }) {
+  const cap = BUTTON_CAP[def.imageSrc ?? ""] ?? {
+    xPct: 83,
+    yPct: 50,
+    rPct: 11,
+  };
+  const capX = def.x + (def.w * cap.xPct) / 100;
+  const capY = def.y + (def.h * cap.yPct) / 100;
+  const capR = (def.w * cap.rPct) / 100;
+
+  return (
+    <g>
+      <image
+        href={def.imageSrc}
+        x={def.x}
+        y={def.y}
+        width={def.w}
+        height={def.h}
+        preserveAspectRatio="none"
+      />
+      <circle
+        cx={capX}
+        cy={capY}
+        r={capR}
+        fill="transparent"
+        className="cursor-pointer"
+        style={{ touchAction: "none" }}
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          e.currentTarget.setPointerCapture(e.pointerId);
+          onPress?.(def.key);
+        }}
+        onPointerUp={(e) => {
+          e.stopPropagation();
+          e.currentTarget.releasePointerCapture(e.pointerId);
+          onRelease?.(def.key);
+        }}
+        onPointerCancel={(e) => {
+          e.stopPropagation();
+          onRelease?.(def.key);
+        }}
+      />
+    </g>
+  );
+}
+
+function DeviceBox({ def }: { def: ComponentDef }) {
   const cx = def.x + def.w / 2;
-  const actuatorY = def.kind === "lamp" ? def.y + def.h - 42 : def.y + 62;
-  const isButton = def.kind === "button";
+  const actuatorY = def.y + def.h - 42;
   return (
     <g>
       <rect
@@ -169,68 +207,12 @@ function DeviceBox({
       <circle
         cx={cx}
         cy={actuatorY}
-        r={isButton && pressed ? 12 : 15}
-        fill={def.kind === "lamp" ? "#fff3cd" : def.accent}
+        r={15}
+        fill="#fff3cd"
         stroke="#33383d"
         strokeWidth={1.5}
-        className={isButton ? "cursor-pointer" : undefined}
-        style={isButton ? { touchAction: "none" } : undefined}
-        onPointerDown={
-          isButton
-            ? (e) => {
-                e.stopPropagation();
-                e.currentTarget.setPointerCapture(e.pointerId);
-                onPress?.(def.key);
-              }
-            : undefined
-        }
-        onPointerUp={
-          isButton
-            ? (e) => {
-                e.stopPropagation();
-                e.currentTarget.releasePointerCapture(e.pointerId);
-                onRelease?.(def.key);
-              }
-            : undefined
-        }
-        onPointerCancel={
-          isButton
-            ? (e) => {
-                e.stopPropagation();
-                onRelease?.(def.key);
-              }
-            : undefined
-        }
       />
-      {def.kind === "lamp" && (
-        <circle cx={cx} cy={actuatorY} r={8} fill={def.accent} />
-      )}
-      {def.kind === "button" && (
-        <>
-          <text
-            x={def.x + def.w * 0.23}
-            y={def.y + def.h * 0.84 - 14}
-            textAnchor="middle"
-            fontSize={8}
-            fontWeight={700}
-            fill="#8a9096"
-            fontFamily="Consolas, monospace"
-          >
-            NO
-          </text>
-          <text
-            x={def.x + def.w * 0.77}
-            y={def.y + def.h * 0.84 - 14}
-            textAnchor="middle"
-            fontSize={8}
-            fontWeight={700}
-            fill="#8a9096"
-            fontFamily="Consolas, monospace"
-          >
-            NC
-          </text>
-        </>
-      )}
+      <circle cx={cx} cy={actuatorY} r={8} fill={def.accent} />
     </g>
   );
 }
@@ -539,17 +521,18 @@ export function WiringCanvas({
       >
         {PANEL_COMPONENTS.map((c) => {
           if (c.kind === "image") return <ImageComponent key={c.key} def={c} />;
+          if (c.kind === "buttonImage")
+            return (
+              <PressableImage
+                key={c.key}
+                def={c}
+                onPress={onPress}
+                onRelease={onRelease}
+              />
+            );
           if (c.kind === "terminalBlock")
             return <TerminalBlock key={c.key} def={c} />;
-          return (
-            <DeviceBox
-              key={c.key}
-              def={c}
-              pressed={c.kind === "button" ? pressed.has(c.key) : undefined}
-              onPress={onPress}
-              onRelease={onRelease}
-            />
-          );
+          return <DeviceBox key={c.key} def={c} />;
         })}
 
         <g>

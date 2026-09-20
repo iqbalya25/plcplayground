@@ -51,15 +51,6 @@ export const MESSAGES: Record<string, MsgEntry> = {
     en: "❌ Both ends of this wire are already the same electrical point — the jumper block connects its terminals internally.",
     id: "❌ Kedua ujung kabel ini sudah satu titik elektrik yang sama — blok jumper menyambungkan terminalnya secara internal.",
   },
-  // contact lessons — {btn} diisi lewat params
-  "wrong-no": {
-    en: "❌ {btn} is an NO button — use its NO contact (13/14). Terminals 21/22 are the NC contact.",
-    id: "❌ {btn} adalah tombol NO — gunakan kontak NO-nya (13/14). Terminal 21/22 adalah kontak NC.",
-  },
-  "wrong-nc": {
-    en: "❌ {btn} is an NC button — use its NC contact (21/22) so the circuit fails safe.",
-    id: "❌ {btn} adalah tombol NC — gunakan kontak NC-nya (21/22) supaya rangkaian fail-safe.",
-  },
   // fallback + UI status messages
   "not-part-of-circuit": {
     en: "❌ {from} → {to} is not part of this circuit. Trace the current path: where must this signal come from?",
@@ -148,7 +139,7 @@ const FIXED_TASK_LABELS: Record<string, MsgEntry> = {
 function buttonType(key: string): "NO" | "NC" {
   return PANEL_COMPONENTS.find((c) => c.key === key)?.contactType ?? "NO";
 }
-const PAIR_LABEL: Record<"NO" | "NC", string> = { NO: "13/14", NC: "21/22" };
+const PAIR_LABEL: Record<"NO" | "NC", string> = { NO: "3/4", NC: "1/2" };
 
 export function translateTask(task: TaskResult, lang: Lang): string {
   if (lang === "en") return task.label;

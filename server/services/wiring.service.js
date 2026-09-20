@@ -3,10 +3,10 @@ const plc = require("../modbus-client");
 /* ---------- static panel pinout (mirrors src/lib/wiring/config/panel.ts) -
    Duplicated on purpose — hardware pin numbering, not evaluation logic. */
 const BUTTON_CONTACTS = {
-  PB1: ["13", "14"],
-  PB2: ["13", "14"],
-  PB3: ["13", "14"],
-  PB4: ["21", "22"],
+  PB1: ["3", "4"],
+  PB2: ["3", "4"],
+  PB3: ["3", "4"],
+  PB4: ["1", "2"],
 };
 const BUTTON_TYPES = { PB1: "NO", PB2: "NO", PB3: "NO", PB4: "NC" };
 

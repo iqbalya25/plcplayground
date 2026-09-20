@@ -52,17 +52,3 @@ export function polarityCheck(a: TerminalId, b: TerminalId): PolarityKey | null 
   if (na === nb) return "same-net";
   return null;
 }
-
-export type ContactHit = { key: "wrong-no" | "wrong-nc"; buttonKey: string };
-
-/** Wrong-contact lessons, resolved per button type. */
-export function contactLesson(
-  buttonKey: string,
-  contactType: "NO" | "NC",
-  terminal: string,
-): ContactHit | null {
-  const isNoPair = terminal === "13" || terminal === "14";
-  if (contactType === "NO" && !isNoPair) return { key: "wrong-no", buttonKey };
-  if (contactType === "NC" && isNoPair) return { key: "wrong-nc", buttonKey };
-  return null;
-}

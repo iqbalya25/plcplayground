@@ -20,8 +20,8 @@ import {
 /* ------------------------------------------------------------------ */
 
 const CONTACT_PAIRS: Record<"NO" | "NC", [string, string]> = {
-  NO: ["13", "14"],
-  NC: ["21", "22"],
+  NO: ["3", "4"],
+  NC: ["1", "2"],
 };
 
 function buttonContactType(key: string): "NO" | "NC" {
@@ -218,7 +218,7 @@ export function evaluate(wires: readonly Wire[]): EvalResult {
   // sneaky 0V → X0 wire stays uncredited (an X input never carries raw 0V).
   const supplyTermsOf = (key: string): string[] => {
     const def = PANEL_COMPONENTS.find((c) => c.key === key);
-    if (def?.kind === "button") {
+    if (def?.kind === "buttonImage") {
       return CONTACT_PAIRS[def.contactType ?? "NO"].map((p) => `${key}.${p}`);
     }
     if (def?.kind === "lamp") return [`${key}.X1`, `${key}.X2`];

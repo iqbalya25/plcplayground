@@ -40,15 +40,25 @@ function imageTerminals(
 }
 
 /** 4 independent screw terminals along one edge: NO pair 13/14, NC pair 21/22. */
-const buttonTerminals: TerminalDef[] = (
-  [
-    ["13", 14],
-    ["14", 32],
-    ["21", 68],
-    ["22", 86],
-  ] as const
-).map(([id, xPct]) => ({ id, xPct, yPct: 84, label: id, labelSide: "below" }));
+const NO_BUTTON_TERMINALS: TerminalDef[] = [
+  { id: "3", xPct: 10, yPct: 20 },
+  { id: "4", xPct: 10, yPct: 75 },
+];
+const NC_BUTTON_TERMINALS: TerminalDef[] = [
+  { id: "1", xPct: 10, yPct: 20 },
+  { id: "2", xPct: 10, yPct: 75 },
+];
 
+interface ButtonCapPos {
+  xPct: number;
+  yPct: number;
+  rPct: number;
+}
+
+export const BUTTON_CAP: Record<string, ButtonCapPos> = {
+  "/images/PBNO.webp": { xPct: 83, yPct: 50, rPct: 11 },
+  "/images/PBNC.webp": { xPct: 83, yPct: 50, rPct: 11 },
+};
 /** Lamp: X1/X2 element terminals + two spares (not internally connected). */
 const lampTerminals: TerminalDef[] = (
   [
@@ -77,6 +87,8 @@ const BTN_W = 165;
 const BTN_H = 140;
 const PLC_X = 520;
 const PLC_Y = 300;
+const BTN_PHOTO_H = BTN_H;
+const BTN_PHOTO_W = Math.round(BTN_PHOTO_H * (369 / 280)); // ≈ 185
 
 export const PANEL_COMPONENTS: ComponentDef[] = [
   {
@@ -111,24 +123,28 @@ export const PANEL_COMPONENTS: ComponentDef[] = [
   },
   ...(
     [
-      ["PB1", "NO", "#1e8a45"],
-      ["PB2", "NO", "#1e8a45"],
-      ["PB3", "NO", "#1e8a45"],
-      ["PB4", "NC", "#c62828"],
+      ["PB1", "NO"],
+      ["PB2", "NO"],
+      ["PB3", "NO"],
+      ["PB4", "NC"],
     ] as const
   ).map(
-    ([key, contactType, accent], i): ComponentDef => ({
+    ([key, contactType], i): ComponentDef => ({
       key,
-      kind: "button",
+      kind: "buttonImage",
       contactType,
-      accent,
       name: `PUSH BUTTON ${contactType}`,
       subtitle: key,
-      x: PLC_X + i * (BTN_W + 45),
-      y: 60,
-      w: BTN_W,
-      h: BTN_H,
-      terminals: buttonTerminals,
+      // Centered on the same column the lamp below it uses — the photo is
+      // wider than the old box, so shift left by half the extra width.
+      x: PLC_X + i * (BTN_W + 100) - (BTN_PHOTO_W - BTN_W) / 2,
+      y: 10,
+      w: BTN_PHOTO_W,
+      h: BTN_PHOTO_H,
+      imageSrc:
+        contactType === "NO" ? "/images/PBNO.webp" : "/images/PBNC.webp",
+      terminals:
+        contactType === "NO" ? NO_BUTTON_TERMINALS : NC_BUTTON_TERMINALS,
     }),
   ),
   ...Array.from(
