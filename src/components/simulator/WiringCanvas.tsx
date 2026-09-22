@@ -7,6 +7,7 @@ import {
   CANVAS_W,
   PANEL_COMPONENTS,
   BUTTON_CAP,
+  LAMP_ON_IMAGE,
 } from "@/lib/wiring/config/panel";
 import { dangerCheck } from "@/lib/wiring/engine/feedback";
 import { CABLE_COLORS } from "@/lib/wiring/hooks/use-wiring";
@@ -165,58 +166,20 @@ function PressableImage({
   );
 }
 
-function DeviceBox({ def }: { def: ComponentDef }) {
-  const cx = def.x + def.w / 2;
-  const actuatorY = def.y + def.h - 42;
+function LampImage({ def, lit }: { def: ComponentDef; lit?: boolean }) {
+  const src =
+    lit && def.imageSrc
+      ? (LAMP_ON_IMAGE[def.imageSrc] ?? def.imageSrc)
+      : def.imageSrc;
   return (
-    <g>
-      <rect
-        x={def.x}
-        y={def.y}
-        width={def.w}
-        height={def.h}
-        fill="#f4f5f6"
-        stroke="#4a4f54"
-        strokeWidth={2}
-      />
-      <text
-        x={cx}
-        y={def.y + 18}
-        textAnchor="middle"
-        fontSize={11}
-        fontWeight={700}
-        fill="#1d2023"
-      >
-        {def.name}
-      </text>
-      <text
-        x={cx}
-        y={def.y + 31}
-        textAnchor="middle"
-        fontSize={9}
-        fill="#5c6268"
-      >
-        {def.subtitle}
-      </text>
-      <rect
-        x={cx - 22}
-        y={actuatorY - 22}
-        width={44}
-        height={44}
-        fill="#dfe2e5"
-        stroke="#4a4f54"
-        strokeWidth={1.5}
-      />
-      <circle
-        cx={cx}
-        cy={actuatorY}
-        r={15}
-        fill="#fff3cd"
-        stroke="#33383d"
-        strokeWidth={1.5}
-      />
-      <circle cx={cx} cy={actuatorY} r={8} fill={def.accent} />
-    </g>
+    <image
+      href={src}
+      x={def.x}
+      y={def.y}
+      width={def.w}
+      height={def.h}
+      preserveAspectRatio="none"
+    />
   );
 }
 
@@ -331,6 +294,7 @@ export interface WiringCanvasProps {
   missTerminals: ReadonlySet<string>;
   badWireIds: ReadonlySet<string>;
   pressed: ReadonlySet<string>;
+  litLamps: ReadonlySet<string>;
   onPress: (key: string) => void;
   onRelease: (key: string) => void;
 }
@@ -340,6 +304,7 @@ export function WiringCanvas({
   missTerminals,
   badWireIds,
   pressed,
+  litLamps,
   onPress,
   onRelease,
 }: WiringCanvasProps) {
@@ -533,9 +498,11 @@ export function WiringCanvas({
                 onRelease={onRelease}
               />
             );
+          if (c.kind === "lampImage")
+            return <LampImage key={c.key} def={c} lit={litLamps.has(c.key)} />;
           if (c.kind === "terminalBlock")
             return <TerminalBlock key={c.key} def={c} />;
-          return <DeviceBox key={c.key} def={c} />;
+          return null;
         })}
 
         <g>

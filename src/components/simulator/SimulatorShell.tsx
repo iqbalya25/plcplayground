@@ -26,6 +26,7 @@ export function SimulatorShell() {
   const [pressedButtons, setPressedButtons] = React.useState<
     ReadonlySet<string>
   >(new Set());
+  const [litLamps] = React.useState<ReadonlySet<string>>(new Set());
 
   usePublishHeaderStatus({
     label: plcReady ? "PLC Connected" : "Server disconnected",
@@ -192,6 +193,7 @@ export function SimulatorShell() {
             missTerminals={missTerminals}
             badWireIds={badWireIds}
             pressed={pressedButtons}
+            litLamps={litLamps}
             onPress={handlePress}
             onRelease={handleRelease}
           />

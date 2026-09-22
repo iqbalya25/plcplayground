@@ -60,21 +60,16 @@ export const BUTTON_CAP: Record<string, ButtonCapPos> = {
   "/images/PBNO.webp": { xPct: 88, yPct: 52, rxPct: 14, ryPct: 24 },
   "/images/PBNC.webp": { xPct: 88, yPct: 52, rxPct: 14, ryPct: 24 },
 };
-/** Lamp: X1/X2 element terminals + two spares (not internally connected). */
-const lampTerminals: TerminalDef[] = (
-  [
-    ["X1", 14, "X1"],
-    ["X2", 32, "X2"],
-    ["SP1", 68, "·"],
-    ["SP2", 86, "·"],
-  ] as const
-).map(([id, xPct, label]) => ({
-  id,
-  xPct,
-  yPct: 16,
-  label,
-  labelSide: "above",
-}));
+
+const LAMP_IMAGE_TERMINALS: TerminalDef[] = [
+  { id: "X1", xPct: 17, yPct: 8 },
+  { id: "X2", xPct: 17, yPct: 51 },
+];
+
+export const LAMP_ON_IMAGE: Record<string, string> = {
+  "/images/PLgreendark.webp": "/images/PLgreenlight.webp",
+  "/images/PLreddark.webp": "/images/PLredlight.webp",
+};
 
 const tbTerminals: TerminalDef[] = Array.from({ length: 6 }, (_, i) => ({
   id: `T${i + 1}`,
@@ -89,7 +84,9 @@ const BTN_H = 140;
 const PLC_X = 520;
 const PLC_Y = 300;
 const BTN_PHOTO_H = BTN_H;
-const BTN_PHOTO_W = Math.round(BTN_PHOTO_H * (369 / 280)); // ≈ 185
+const BTN_PHOTO_W = Math.round(BTN_PHOTO_H * (369 / 280));
+const LAMP_PHOTO_H = BTN_H;
+const LAMP_PHOTO_W = Math.round(LAMP_PHOTO_H * (380 / 298));
 
 export const PANEL_COMPONENTS: ComponentDef[] = [
   {
@@ -148,19 +145,25 @@ export const PANEL_COMPONENTS: ComponentDef[] = [
         contactType === "NO" ? NO_BUTTON_TERMINALS : NC_BUTTON_TERMINALS,
     }),
   ),
-  ...Array.from(
-    { length: 4 },
-    (_, i): ComponentDef => ({
-      key: `LAMP${i + 1}`,
-      kind: "lamp",
-      accent: "#e6a800",
+  ...(
+    [
+      ["LAMP1", "/images/PLgreendark.webp"],
+      ["LAMP2", "/images/PLgreendark.webp"],
+      ["LAMP3", "/images/PLreddark.webp"],
+      ["LAMP4", "/images/PLreddark.webp"],
+    ] as const
+  ).map(
+    ([key, imageSrc], i): ComponentDef => ({
+      key,
+      kind: "lampImage",
       name: "PILOT LAMP",
-      subtitle: `LAMP${i + 1} · 24VDC`,
-      x: PLC_X + i * (BTN_W + 45),
+      subtitle: key,
+      x: PLC_X + i * (BTN_W + 100), // unchanged — separate from the button gap you widened
       y: 850,
-      w: BTN_W,
-      h: BTN_H,
-      terminals: lampTerminals,
+      w: LAMP_PHOTO_W,
+      h: LAMP_PHOTO_H,
+      imageSrc,
+      terminals: LAMP_IMAGE_TERMINALS,
     }),
   ),
   {

@@ -221,7 +221,7 @@ export function evaluate(wires: readonly Wire[]): EvalResult {
     if (def?.kind === "buttonImage") {
       return CONTACT_PAIRS[def.contactType ?? "NO"].map((p) => `${key}.${p}`);
     }
-    if (def?.kind === "lamp") return [`${key}.X1`, `${key}.X2`];
+    if (def?.kind === "lampImage") return [`${key}.X1`, `${key}.X2`];
     return [];
   };
 
