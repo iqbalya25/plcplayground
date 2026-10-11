@@ -18,8 +18,8 @@ const LN_REQUIREMENTS = [
 const MAIN_POWER_COIL = 3072; // M0
 
 const SS_COIL = 3122; // M50 — S/S wired to 24V
-const WIRING_COILS = { X0: 3073, X1: 3074 }; // M1, M2 — wiring correctness
-const PRESS_COILS = { X0: 3123, X1: 3124 }; // M51, M52 — simulated press
+const WIRING_COILS = { X0: 3073, X1: 3074, X6: 3075, X7: 3076 }; // M1-M4 — wiring correctness
+const PRESS_COILS = { X0: 3123, X1: 3124, X6: 3125, X7: 3126 }; // M51-M54 — simulated press
 
 let poweredOn = false;
 

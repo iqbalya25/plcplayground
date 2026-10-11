@@ -13,6 +13,17 @@ import { dangerCheck } from "@/lib/wiring/engine/feedback";
 import { CABLE_COLORS } from "@/lib/wiring/hooks/use-wiring";
 import type { WiringApi } from "@/lib/wiring/hooks/use-wiring";
 
+const STATIC_ADDRESS: Record<string, string> = {
+  PB1: "X0",
+  PB2: "X1",
+  PB3: "X6",
+  PB4: "X7",
+  LAMP1: "Y0",
+  LAMP2: "Y1",
+  LAMP3: "Y2",
+  LAMP4: "Y3",
+};
+
 /* ---------- geometry helpers ---------- */
 
 export function terminalPosition(
@@ -162,6 +173,45 @@ function PressableImage({
           onRelease?.(def.key);
         }}
       />
+    </g>
+  );
+}
+
+function AddressLabel({
+  def,
+  address,
+}: {
+  def: ComponentDef;
+  address?: string;
+}) {
+  const boxW = 70; // was 56 (+25%)
+  const boxH = 30; // was 24 (+25%)
+  const cx = def.x + def.w / 2;
+  const boxX = cx - boxW / 2;
+  const boxY = Math.max(0, def.y - 20); // clamp so it never clips above the canvas edge
+
+  return (
+    <g pointerEvents="none">
+      <rect
+        x={boxX}
+        y={boxY}
+        width={boxW}
+        height={boxH}
+        fill="#ffffff"
+        stroke="#1d2023"
+        strokeWidth={2}
+      />
+      <text
+        x={cx}
+        y={boxY + boxH / 2 + 6}
+        textAnchor="middle"
+        fontSize={17}
+        fontWeight={800}
+        fill="#1d2023"
+        fontFamily="Consolas, monospace"
+      >
+        {address ?? "—"}
+      </text>
     </g>
   );
 }
@@ -464,15 +514,22 @@ export function WiringCanvas({
           if (c.kind === "image") return <ImageComponent key={c.key} def={c} />;
           if (c.kind === "buttonImage")
             return (
-              <PressableImage
-                key={c.key}
-                def={c}
-                onPress={onPress}
-                onRelease={onRelease}
-              />
+              <React.Fragment key={c.key}>
+                <PressableImage
+                  def={c}
+                  onPress={onPress}
+                  onRelease={onRelease}
+                />
+                <AddressLabel def={c} address={STATIC_ADDRESS[c.key]} />
+              </React.Fragment>
             );
           if (c.kind === "lampImage")
-            return <LampImage key={c.key} def={c} lit={litLamps.has(c.key)} />;
+            return (
+              <React.Fragment key={c.key}>
+                <LampImage def={c} lit={litLamps.has(c.key)} />
+                <AddressLabel def={c} address={STATIC_ADDRESS[c.key]} />
+              </React.Fragment>
+            );
           return null;
         })}
 

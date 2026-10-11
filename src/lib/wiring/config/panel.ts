@@ -9,7 +9,7 @@ import { activeModel, activePlcTerminals } from "./plc-models";
  */
 export const PX_PER_MM = 4.4;
 export const CANVAS_W = 1840;
-export const CANVAS_H = 1060;
+export const CANVAS_H = 1000;
 
 const mm = (v: number) => Math.round(v * PX_PER_MM);
 
