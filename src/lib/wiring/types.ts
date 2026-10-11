@@ -16,11 +16,7 @@ export interface Wire {
   color: string;
 }
 
-export type ComponentKind =
-  | "image"
-  | "buttonImage"
-  | "lampImage"
-  | "terminalBlock";
+export type ComponentKind = "image" | "buttonImage" | "lampImage";
 
 export interface TerminalDef {
   id: string;

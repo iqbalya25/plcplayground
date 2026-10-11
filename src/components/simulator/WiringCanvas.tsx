@@ -183,33 +183,6 @@ function LampImage({ def, lit }: { def: ComponentDef; lit?: boolean }) {
   );
 }
 
-function TerminalBlock({ def }: { def: ComponentDef }) {
-  return (
-    <g>
-      <rect
-        x={def.x}
-        y={def.y}
-        width={def.w}
-        height={def.h}
-        fill="#f4f5f6"
-        stroke="#4a4f54"
-        strokeWidth={2}
-      />
-      <rect x={def.x} y={def.y} width={8} height={def.h} fill={def.accent} />
-      <text
-        x={def.x + 16}
-        y={def.y + 13}
-        fontSize={9}
-        fontWeight={700}
-        fill="#8a9096"
-        fontFamily="Consolas, monospace"
-      >
-        {def.name}
-      </text>
-    </g>
-  );
-}
-
 interface TerminalDotProps {
   id: TerminalId;
   pos: Point;
@@ -500,8 +473,6 @@ export function WiringCanvas({
             );
           if (c.kind === "lampImage")
             return <LampImage key={c.key} def={c} lit={litLamps.has(c.key)} />;
-          if (c.kind === "terminalBlock")
-            return <TerminalBlock key={c.key} def={c} />;
           return null;
         })}
 

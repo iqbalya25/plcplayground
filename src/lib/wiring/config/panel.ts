@@ -8,7 +8,7 @@ import { activeModel, activePlcTerminals } from "./plc-models";
  * Images are cropped to the device edges, so the rectangle == the device.
  */
 export const PX_PER_MM = 4.4;
-export const CANVAS_W = 1560;
+export const CANVAS_W = 1840;
 export const CANVAS_H = 1060;
 
 const mm = (v: number) => Math.round(v * PX_PER_MM);
@@ -71,13 +71,24 @@ export const LAMP_ON_IMAGE: Record<string, string> = {
   "/images/PLreddark.webp": "/images/PLredlight.webp",
 };
 
-const tbTerminals: TerminalDef[] = Array.from({ length: 6 }, (_, i) => ({
-  id: `T${i + 1}`,
-  xPct: 10 + i * 16,
-  yPct: 62,
-  label: String(i + 1),
-  labelSide: "above",
-}));
+const TB_COLS = 10;
+const TB_COL_START_PCT = 7;
+const TB_COL_STEP_PCT = 9.7;
+const TB_TOP_ROW_PCT = 20;
+const TB_BOTTOM_ROW_PCT = 90;
+
+const tbTerminals: TerminalDef[] = [
+  ...Array.from({ length: TB_COLS }, (_, i) => ({
+    id: `T${i + 1}`,
+    xPct: TB_COL_START_PCT + i * TB_COL_STEP_PCT,
+    yPct: TB_TOP_ROW_PCT,
+  })),
+  ...Array.from({ length: TB_COLS }, (_, i) => ({
+    id: `B${i + 1}`,
+    xPct: TB_COL_START_PCT + i * TB_COL_STEP_PCT,
+    yPct: TB_BOTTOM_ROW_PCT,
+  })),
+];
 
 const BTN_W = 165;
 const BTN_H = 140;
@@ -87,6 +98,12 @@ const BTN_PHOTO_H = BTN_H;
 const BTN_PHOTO_W = Math.round(BTN_PHOTO_H * (369 / 280));
 const LAMP_PHOTO_H = BTN_H;
 const LAMP_PHOTO_W = Math.round(LAMP_PHOTO_H * (380 / 298));
+
+const TB_W = 325;
+const TB_H = 139;
+const TB_GAP = 30;
+const TB_X = PLC_X + mm(activeModel().widthMm) + 40;
+const TB_Y = PLC_Y + (mm(activeModel().heightMm) - TB_H) / 2;
 
 export const PANEL_COMPONENTS: ComponentDef[] = [
   {
@@ -168,24 +185,24 @@ export const PANEL_COMPONENTS: ComponentDef[] = [
   ),
   {
     key: "TB24",
-    kind: "terminalBlock",
+    kind: "image",
     name: "+24V TERMINAL BLOCK",
-    accent: "#d32f2f",
-    x: 40,
-    y: 900,
-    w: 380,
-    h: 60,
+    x: TB_X,
+    y: TB_Y,
+    w: TB_W,
+    h: TB_H,
+    imageSrc: "/images/terminaluk24v.webp",
     terminals: tbTerminals,
   },
   {
     key: "TB0",
-    kind: "terminalBlock",
+    kind: "image",
     name: "0V TERMINAL BLOCK",
-    accent: "#17191c",
-    x: 40,
-    y: 980,
-    w: 380,
-    h: 60,
+    x: TB_X + TB_W + TB_GAP,
+    y: TB_Y,
+    w: TB_W,
+    h: TB_H,
+    imageSrc: "/images/terminaluk0v.webp",
     terminals: tbTerminals,
   },
 ];
