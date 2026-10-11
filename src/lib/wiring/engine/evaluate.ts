@@ -91,7 +91,7 @@ export function evaluate(wires: readonly Wire[]): EvalResult {
     "0V distribution — PSU −V → 0V block",
     conn.connected("PSU.0VDC", "TB0"),
   );
-  netTask("ss", "Input common — S/S on the 0V net", on0V("PLC.S/S"));
+  netTask("ss", "Input common — S/S on the 24V net", on24V("PLC.S/S"));
 
   /* ---------- buttons: free X address, supply from anywhere on 0V - */
   const claimedX = new Set<string>();
@@ -107,8 +107,8 @@ export function evaluate(wires: readonly Wire[]): EvalResult {
     const bypassed = conn.connected(t1, t2);
     if (bypassed) bypassedDevices.add(key);
 
-    const s1 = on24V(t1);
-    const s2 = on24V(t2);
+    const s1 = on0V(t1);
+    const s2 = on0V(t2);
     const supplyDone = (s1 || s2) && !bypassed;
 
     // Signal side: the OTHER contact terminal reaching any free X input.
@@ -133,7 +133,7 @@ export function evaluate(wires: readonly Wire[]): EvalResult {
 
     tasks.push({
       id: `${key}-supply`,
-      label: `${key} supply — 24V (block, PSU, or jumper) → ${type} contact (${pair.join("/")})`,
+      label: `${key} supply — 0V (block, PSU, or jumper) → ${type} contact (${pair.join("/")})`,
       done: supplyDone,
     });
     tasks.push({
@@ -226,14 +226,21 @@ export function evaluate(wires: readonly Wire[]): EvalResult {
   };
 
   const carrier0V = (t: string): boolean => {
-    return net(t) === "TB0" || t === "PSU.0VDC" || /^PLC\.COM\d+$/.test(t);
+    if (net(t) === "TB0" || t === "PSU.0VDC" || /^PLC\.COM\d+$/.test(t))
+      return true;
+    const dev = deviceOf(t);
+    return (
+      /^PB\d+$/.test(dev) &&
+      !bypassedDevices.has(dev) &&
+      supplyTermsOf(dev).includes(t)
+    );
   };
 
   const carrier24V = (t: string) => {
     if (net(t) === "TB24" || t === "PSU.24VDC" || t === "PLC.S/S") return true;
     const dev = deviceOf(t);
     return (
-      (/^LAMP\d+$/.test(dev) || /^PB\d+$/.test(dev)) &&
+      /^LAMP\d+$/.test(dev) &&
       !bypassedDevices.has(dev) &&
       supplyTermsOf(dev).includes(t)
     );

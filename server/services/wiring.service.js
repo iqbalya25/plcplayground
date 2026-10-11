@@ -17,7 +17,7 @@ const LN_REQUIREMENTS = [
 ];
 const MAIN_POWER_COIL = 3072; // M0
 
-const SS_COIL = 3122; // M50 — S/S wired to 0V
+const SS_COIL = 3122; // M50 — S/S wired to 24V
 const WIRING_COILS = { X0: 3073, X1: 3074 }; // M1, M2 — wiring correctness
 const PRESS_COILS = { X0: 3123, X1: 3124 }; // M51, M52 — simulated press
 
@@ -71,9 +71,8 @@ function findAssignedButton(conn, xAddr) {
 function isWiringReady(conn, xAddr) {
   const assigned = findAssignedButton(conn, xAddr);
   if (!assigned) return false;
-  const on24 = (t) =>
-    conn.connected(t, "PSU.24VDC") || conn.connected(t, "TB24");
-  return on24(assigned.supplyTerm);
+  const on0 = (t) => conn.connected(t, "PSU.0VDC") || conn.connected(t, "TB0");
+  return on0(assigned.supplyTerm);
 }
 
 function isSimPressed(conn, xAddr, pressed) {
@@ -90,7 +89,7 @@ function wiresToCoils(wires, pressed = []) {
     conn.connected(a, b),
   );
   desired[SS_COIL] =
-    conn.connected("PLC.S/S", "PSU.0VDC") || conn.connected("PLC.S/S", "TB0");
+    conn.connected("PLC.S/S", "PSU.24VDC") || conn.connected("PLC.S/S", "TB24");
 
   for (const [xAddr, coil] of Object.entries(WIRING_COILS)) {
     desired[coil] = isWiringReady(conn, xAddr);

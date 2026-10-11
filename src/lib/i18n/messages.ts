@@ -19,29 +19,29 @@ export const MESSAGES: Record<string, MsgEntry> = {
     id: "⚠ BAHAYA: L1 terhubung langsung ke L2 adalah hubung singkat — MCB akan langsung trip.",
   },
   // polarity lessons
-  "ss-needs-0v": {
-    en: "❌ S/S must receive 0VDC, not 24V. Feed it from the 0V block.",
-    id: "❌ S/S harus menerima 0VDC, bukan 24V. Ambil dari blok 0V.",
+  "ss-needs-24v": {
+    en: "❌ S/S must receive 24VDC, not 0V. Feed it from the +24V block.",
+    id: "❌ S/S harus menerima 24VDC, bukan 0V. Ambil dari blok +24V.",
   },
   "com-needs-0v": {
     en: "❌ COM terminals must receive 0VDC, not 24V. The output common is the 0V side in this configuration.",
     id: "❌ Terminal COM harus menerima 0VDC, bukan 24V. Common output ada di sisi 0V pada konfigurasi ini.",
   },
-  "x-input-no-0v": {
-    en: "❌ X inputs must not be tied to 0V. Because S/S is at 0V, an input activates when switched to 24V through a button.",
-    id: "❌ Input X tidak boleh terhubung langsung ke 0V. Karena S/S di 0V, input aktif saat di-switch ke 24V lewat tombol.",
+  "x-input-no-24v": {
+    en: "❌ X inputs must not be tied to 24V. Because S/S is at 24V, an input activates when switched to 0V through a button.",
+    id: "❌ Input X tidak boleh terhubung langsung ke 24V. Karena S/S di 24V, input aktif saat di-switch ke 0V lewat tombol.",
   },
-  "x-input-direct-24v": {
-    en: "❌ Do not wire an X input straight to 24V — it would be permanently ON. The 24V must pass through a push button contact.",
-    id: "❌ Jangan sambungkan input X langsung ke 24V — nanti selalu ON. 24V harus lewat kontak push button dulu.",
+  "x-input-direct-0v": {
+    en: "❌ Do not wire an X input straight to 0V — it would be permanently ON. The 0V must pass through a push button contact.",
+    id: "❌ Jangan sambungkan input X langsung ke 0V — nanti selalu ON. 0V harus lewat kontak push button dulu.",
   },
   "lamp-needs-24v": {
     en: "❌ The lamp's other terminal must go to the +24V block, not 0V. The Y output switches the 0V side internally through COM.",
     id: "❌ Terminal lampu yang lain harus ke blok +24V, bukan 0V. Output Y men-switch sisi 0V secara internal lewat COM.",
   },
-  "button-switch-24v": {
-    en: "❌ The button must switch 24V into the input, not 0V. Wire the button from the +24V block.",
-    id: "❌ Tombol harus men-switch 24V ke input, bukan 0V. Sambungkan tombol dari blok +24V.",
+  "button-switch-0v": {
+    en: "❌ The button must switch 0V into the input, not 24V. Wire the button from the 0V block.",
+    id: "❌ Tombol harus men-switch 0V ke input, bukan 24V. Sambungkan tombol dari blok 0V.",
   },
   "lamp-spare": {
     en: "❌ That lamp terminal is a spare — it is not connected internally. Use X1/X2.",
@@ -127,8 +127,8 @@ const FIXED_TASK_LABELS: Record<string, MsgEntry> = {
     id: "Distribusi 0V — PSU −V → blok 0V",
   },
   ss: {
-    en: "Input common — S/S on the 0V net",
-    id: "Common input — S/S pada jalur 0V",
+    en: "Input common — S/S on the 24V net",
+    id: "Common input — S/S pada jalur 24V",
   },
   "com-pending": {
     en: "Output common — 0V → COM of the Y group you use",
@@ -150,7 +150,7 @@ export function translateTask(task: TaskResult, lang: Lang): string {
   let m = task.id.match(/^(PB\d+)-supply$/);
   if (m) {
     const type = buttonType(m[1]);
-    return `${m[1]} supply — 24V (blok, PSU, atau jumper) → kontak ${type} (${PAIR_LABEL[type]})`;
+    return `${m[1]} supply — 0V (blok, PSU, atau jumper) → kontak ${type} (${PAIR_LABEL[type]})`;
   }
   m = task.id.match(/^(PB\d+)-signal$/);
   if (m) return `${m[1]} sinyal — kontak → input X mana pun yang masih kosong`;
