@@ -1,4 +1,9 @@
-import { PANEL_COMPONENTS, Y_COM_GROUPS } from "../wiring/config/panel";
+import {
+  PANEL_COMPONENTS,
+  REQUIRED_X,
+  REQUIRED_Y,
+  Y_COM_GROUPS,
+} from "../wiring/config/panel";
 import type { TaskResult } from "../wiring/types";
 
 export type Lang = "en" | "id";
@@ -20,12 +25,12 @@ export const MESSAGES: Record<string, MsgEntry> = {
   },
   // polarity lessons
   "ss-needs-24v": {
-    en: "❌ S/S must receive 24VDC, not 0V. Feed it from the +24V block.",
-    id: "❌ S/S harus menerima 24VDC, bukan 0V. Ambil dari blok +24V.",
+    en: "ℹ️ In this simulator, S/S input uses 24VDC. Feed it from the +24V block.",
+    id: "ℹ️ Pada aplikasi ini, S/S input menggunakan 24VDC. Ambil dari blok +24V.",
   },
   "com-needs-0v": {
-    en: "❌ COM terminals must receive 0VDC, not 24V. The output common is the 0V side in this configuration.",
-    id: "❌ Terminal COM harus menerima 0VDC, bukan 24V. Common output ada di sisi 0V pada konfigurasi ini.",
+    en: "ℹ️ In this simulator, COM output uses 0VDC. Feed it from the 0V block.",
+    id: "ℹ️ Pada aplikasi ini, COM output menggunakan 0VDC. Ambil dari blok 0V.",
   },
   "x-input-no-24v": {
     en: "❌ X inputs must not be tied to 24V. Because S/S is at 24V, an input activates when switched to 0V through a button.",
@@ -81,8 +86,8 @@ export const MESSAGES: Record<string, MsgEntry> = {
     id: "// Panel direset. Mulai dari MCB L1/L2 OUT.",
   },
   "initial-hint": {
-    en: "// MCB input is pre-wired to 220VAC. Start from MCB L1/L2 OUT. Correct wires turn green automatically — buttons and lamps may use any free X / Y address.",
-    id: "// Input MCB sudah pre-wired ke 220VAC. Mulai dari MCB L1/L2 OUT. Kabel yang benar otomatis jadi hijau — tombol dan lampu boleh pakai alamat X/Y bebas.",
+    en: "// MCB input is pre-wired to 220VAC. Start from MCB L1/L2 OUT. Correct wires turn green automatically — each button and lamp has a specific X/Y address, check the checklist.",
+    id: "// Input MCB sudah pre-wired ke 220VAC. Mulai dari MCB L1/L2 OUT. Kabel yang benar otomatis jadi hijau — setiap tombol dan lampu punya alamat X/Y tertentu, cek checklist.",
   },
 };
 
@@ -153,11 +158,10 @@ export function translateTask(task: TaskResult, lang: Lang): string {
     return `${m[1]} supply — 0V (blok, PSU, atau jumper) → kontak ${type} (${PAIR_LABEL[type]})`;
   }
   m = task.id.match(/^(PB\d+)-signal$/);
-  if (m) return `${m[1]} sinyal — kontak → input X mana pun yang masih kosong`;
+  if (m) return `${m[1]} sinyal — kontak → ${REQUIRED_X[m[1]]}`;
 
   m = task.id.match(/^(LAMP\d+)-signal$/);
-  if (m)
-    return `${m[1]} penggerak — output Y mana pun yang masih kosong → lampu (X1/X2)`;
+  if (m) return `${m[1]} penggerak — ${REQUIRED_Y[m[1]]} → lampu (X1/X2)`;
 
   m = task.id.match(/^(LAMP\d+)-return$/);
   if (m) return `${m[1]} balik — lampu → blok +24V (blok, PSU, atau jumper)`;

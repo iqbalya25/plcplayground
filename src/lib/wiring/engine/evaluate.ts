@@ -5,9 +5,9 @@ import {
   BUTTON_KEYS,
   LAMP_KEYS,
   PANEL_COMPONENTS,
-  X_INPUTS,
+  REQUIRED_X,
+  REQUIRED_Y,
   Y_COM_GROUPS,
-  Y_OUTPUTS,
 } from "../config/panel";
 
 /* ------------------------------------------------------------------ */
@@ -94,13 +94,15 @@ export function evaluate(wires: readonly Wire[]): EvalResult {
   netTask("ss", "Input common — S/S on the 24V net", on24V("PLC.S/S"));
 
   /* ---------- buttons: free X address, supply from anywhere on 0V - */
-  const claimedX = new Set<string>();
+  /* ---------- buttons: fixed address per scenario, supply from 0V -- */
+  /* ---------- buttons: fixed address per scenario, supply from 0V -- */
   const bypassedDevices = new Set<string>();
 
   for (const key of BUTTON_KEYS) {
     const type = buttonContactType(key);
     const pair = CONTACT_PAIRS[type];
     const [t1, t2] = pair.map((p) => `${key}.${p}`) as [string, string];
+    const requiredAddr = REQUIRED_X[key];
 
     // Bypass: an external path joins both sides of the contact — the
     // button would be permanently "pressed". Never creditable.
@@ -111,23 +113,19 @@ export function evaluate(wires: readonly Wire[]): EvalResult {
     const s2 = on0V(t2);
     const supplyDone = (s1 || s2) && !bypassed;
 
-    // Signal side: the OTHER contact terminal reaching any free X input.
+    // Signal side: the OTHER contact terminal must reach THIS button's
+    // required X address (see REQUIRED_X) — not just any free one.
     let address: string | undefined;
     if (!bypassed) {
       const signalCandidates = s1 && !s2 ? [t2] : s2 && !s1 ? [t1] : [t1, t2];
-      outer: for (const st of signalCandidates) {
-        for (const addr of X_INPUTS) {
-          if (claimedX.has(addr)) continue;
-          if (conn.connected(st, `PLC.${addr}`)) {
-            address = addr;
-            break outer;
-          }
-        }
+      if (
+        signalCandidates.some((st) => conn.connected(st, `PLC.${requiredAddr}`))
+      ) {
+        address = requiredAddr;
       }
     }
     const signalDone = Boolean(address);
     if (supplyDone && signalDone && address) {
-      claimedX.add(address);
       assignments[key] = address;
     }
 
@@ -138,18 +136,28 @@ export function evaluate(wires: readonly Wire[]): EvalResult {
     });
     tasks.push({
       id: `${key}-signal`,
-      label: `${key} signal — ${type} contact → any free X input`,
+      label: `${key} signal — ${type} contact → ${requiredAddr}`,
       done: signalDone,
       detail: address ? `→ ${address}` : undefined,
     });
   }
 
   /* ---------- lamps: free Y address, return to anywhere on 24V ---- */
-  const claimedY = new Set<string>();
+  /* ---------- lamps: fixed address per scenario, return on 24V ---- */
+  // Which COM groups this scenario needs is known upfront from REQUIRED_Y,
+  // so the COM checklist items appear from the start instead of only
+  // showing up once a lamp happens to get wired.
   const usedComGroups = new Set<string>();
+  for (const addr of Object.values(REQUIRED_Y)) {
+    const group = Object.entries(Y_COM_GROUPS).find(([, ys]) =>
+      ys.includes(addr),
+    )?.[0];
+    if (group) usedComGroups.add(group);
+  }
 
   for (const key of LAMP_KEYS) {
     const [t1, t2] = [`${key}.X1`, `${key}.X2`];
+    const requiredAddr = REQUIRED_Y[key];
 
     const bypassed = conn.connected(t1, t2);
     if (bypassed) bypassedDevices.add(key);
@@ -161,29 +169,20 @@ export function evaluate(wires: readonly Wire[]): EvalResult {
     let address: string | undefined;
     if (!bypassed) {
       const signalCandidates = s1 && !s2 ? [t2] : s2 && !s1 ? [t1] : [t1, t2];
-      outer: for (const st of signalCandidates) {
-        for (const addr of Y_OUTPUTS) {
-          if (claimedY.has(addr)) continue;
-          if (conn.connected(st, `PLC.${addr}`)) {
-            address = addr;
-            break outer;
-          }
-        }
+      if (
+        signalCandidates.some((st) => conn.connected(st, `PLC.${requiredAddr}`))
+      ) {
+        address = requiredAddr;
       }
     }
     const signalDone = Boolean(address);
     if (returnDone && signalDone && address) {
-      claimedY.add(address);
       assignments[key] = address;
-      const group = Object.entries(Y_COM_GROUPS).find(([, ys]) =>
-        ys.includes(address!),
-      )?.[0];
-      if (group) usedComGroups.add(group);
     }
 
     tasks.push({
       id: `${key}-signal`,
-      label: `${key} drive — any free Y output → lamp (X1/X2)`,
+      label: `${key} drive — ${requiredAddr} → lamp (X1/X2)`,
       done: signalDone,
       detail: address ? `→ ${address}` : undefined,
     });
@@ -195,20 +194,12 @@ export function evaluate(wires: readonly Wire[]): EvalResult {
   }
 
   /* ---------- output commons: one task per COM group used --------- */
-  if (usedComGroups.size === 0) {
-    tasks.push({
-      id: "com-pending",
-      label: "Output common — 0V → COM of the Y group you use",
-      done: false,
-    });
-  } else {
-    for (const group of [...usedComGroups].sort()) {
-      netTask(
-        `com-${group}`,
-        `Output common — 0V → ${group} (${Y_COM_GROUPS[group].join(", ")})`,
-        on0V(`PLC.${group}`),
-      );
-    }
+  for (const group of [...usedComGroups].sort()) {
+    netTask(
+      `com-${group}`,
+      `Output common — 0V → ${group} (${Y_COM_GROUPS[group].join(", ")})`,
+      on0V(`PLC.${group}`),
+    );
   }
 
   /* ---------- green wires (carrier rule) --------------------------- */

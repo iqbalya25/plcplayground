@@ -133,17 +133,16 @@ export function SimulatorShell() {
         msgs.push({ kind: "err", text: translateMessage(dangerKey, lang) });
         continue;
       }
-      bad.add(w.id);
+      // Only S/S and COM are app-wide conventions worth spelling out —
+      // everything else (wrong address, a backward button/lamp, a loose
+      // wire) is meant to be diagnosed by testing, same as real hardware.
       const polarityKey = polarityCheck(w.from, w.to);
-      const text = polarityKey
-        ? translateMessage(polarityKey, lang)
-        : translateMessage("not-part-of-circuit", lang, {
-            from: w.from,
-            to: w.to,
-          });
-      msgs.push({ kind: "err", text });
-      miss.add(w.from);
-      miss.add(w.to);
+      if (polarityKey === "ss-needs-24v" || polarityKey === "com-needs-0v") {
+        bad.add(w.id);
+        msgs.push({ kind: "err", text: translateMessage(polarityKey, lang) });
+        miss.add(w.from);
+        miss.add(w.to);
+      }
     }
     if (msgs.length === 0) {
       msgs.push({
