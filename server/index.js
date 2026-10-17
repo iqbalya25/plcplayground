@@ -8,6 +8,8 @@
 const express = require("express");
 const plc = require("./modbus-client");
 const wiringRoutes = require("./routes/wiring.routes");
+const cameraRoutes = require("./routes/camera.routes");
+const camera = require("./services/camera.service");
 const powerMeter = require("./services/powermeter.service");
 
 const PORT = Number(process.env.PORT || 4000);
@@ -15,6 +17,7 @@ const PORT = Number(process.env.PORT || 4000);
 const app = express();
 app.use(express.json());
 app.use(wiringRoutes);
+app.use(cameraRoutes);
 app.use("/api/powermeter", powerMeter.router);
 
 app.listen(PORT, async () => {
@@ -28,6 +31,7 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, async () => {
     console.log(`[server] ${signal} — resetting coils and shutting down`);
     powerMeter.stop();
+    camera.stop();
     await plc.stop();
     process.exit(0);
   });

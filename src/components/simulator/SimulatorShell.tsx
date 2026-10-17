@@ -17,7 +17,11 @@ import { sendWiring, resetPlc, powerOff, powerOn } from "@/lib/plc/plc-api";
 import { WiringCanvas } from "./WiringCanvas";
 import { ChecklistPanel } from "./ChecklistPanel";
 import { MessagePanel, type Message } from "./MessagePanel";
-import { usePublishHeaderStatus } from "../layout/HeaderStatusContext";
+import {
+  usePublishHeaderStatus,
+  usePublishCameraToggle,
+} from "../layout/HeaderStatusContext";
+import { CameraPanel } from "./CameraPanel";
 import { translateMessage, translateTask } from "@/lib/i18n/messages";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
 
@@ -89,6 +93,13 @@ export function SimulatorShell() {
     label: plcReady ? "Server Connected" : "Server disconnected",
     state: plcReady ? "ok" : "error",
   });
+
+  const [cameraOpen, setCameraOpen] = React.useState(false);
+  const toggleCamera = React.useCallback(
+    () => setCameraOpen((open) => !open),
+    [],
+  );
+  usePublishCameraToggle(cameraOpen, toggleCamera);
 
   const [hintMessages, setHintMessages] = React.useState<Message[]>([
     { kind: "dim", text: translateMessage("initial-hint", lang) },
@@ -263,31 +274,35 @@ export function SimulatorShell() {
           )}
         </div>
 
-        <aside className="flex w-[320px] flex-col gap-3 border-l-2 border-panel-border bg-panel-muted p-3">
-          <ChecklistPanel evaluation={evaluation} />
-          <Card>
-            <CardHeader>
-              <CardTitle>How to wire</CardTitle>
-            </CardHeader>
-            <CardContent className="text-[11.5px] leading-relaxed text-ink-dim">
-              Click a terminal to start a wire, click empty space to lock a
-              corner, click the destination terminal to finish.{" "}
-              <kbd className="border border-[#9aa0a6] bg-white px-1 font-mono text-[10px]">
-                ESC
-              </kbd>{" "}
-              cancels. Click a wire, then{" "}
-              <kbd className="border border-[#9aa0a6] bg-white px-1 font-mono text-[10px]">
-                Delete
-              </kbd>{" "}
-              removes it. <b>Zoom</b>: mouse wheel or the +/− buttons ·{" "}
-              <b>Pan</b>: middle-mouse drag, or hold{" "}
-              <kbd className="border border-[#9aa0a6] bg-white px-1 font-mono text-[10px]">
-                Space
-              </kbd>{" "}
-              and drag.
-            </CardContent>
-          </Card>
-        </aside>
+        {cameraOpen ? (
+          <CameraPanel />
+        ) : (
+          <aside className="flex w-[320px] flex-col gap-3 border-l-2 border-panel-border bg-panel-muted p-3">
+            <ChecklistPanel evaluation={evaluation} />
+            <Card>
+              <CardHeader>
+                <CardTitle>How to wire</CardTitle>
+              </CardHeader>
+              <CardContent className="text-[11.5px] leading-relaxed text-ink-dim">
+                Click a terminal to start a wire, click empty space to lock a
+                corner, click the destination terminal to finish.{" "}
+                <kbd className="border border-[#9aa0a6] bg-white px-1 font-mono text-[10px]">
+                  ESC
+                </kbd>{" "}
+                cancels. Click a wire, then{" "}
+                <kbd className="border border-[#9aa0a6] bg-white px-1 font-mono text-[10px]">
+                  Delete
+                </kbd>{" "}
+                removes it. <b>Zoom</b>: mouse wheel or the +/− buttons ·{" "}
+                <b>Pan</b>: middle-mouse drag, or hold{" "}
+                <kbd className="border border-[#9aa0a6] bg-white px-1 font-mono text-[10px]">
+                  Space
+                </kbd>{" "}
+                and drag.
+              </CardContent>
+            </Card>
+          </aside>
+        )}
       </div>
 
       {/*

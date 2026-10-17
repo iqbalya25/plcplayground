@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { useHeaderStatus } from "./HeaderStatusContext";
+import { useHeaderStatus, useCameraToggle } from "./HeaderStatusContext";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
 import { FlagIcon } from "./FlagIcon";
 
@@ -21,8 +21,26 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 export function Navbar() {
+  function CameraIcon() {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        className="h-3.5 w-3.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <polygon points="23 7 16 12 23 17 23 7" />
+        <rect x="1" y="5" width="15" height="14" rx="2" />
+      </svg>
+    );
+  }
   const pathname = usePathname();
   const status = useHeaderStatus();
+  const camera = useCameraToggle();
   const { lang, setLang } = useLanguage();
 
   return (
@@ -51,9 +69,26 @@ export function Navbar() {
         })}
       </nav>
 
+      {camera && (
+        <button
+          onClick={camera.onToggle}
+          aria-pressed={camera.open}
+          title={camera.open ? "Hide camera" : "Show live camera"}
+          className={cn(
+            "ml-auto flex items-center gap-1.5 border px-2 py-1 text-xs font-bold",
+            camera.open
+              ? "border-ink bg-ink text-white"
+              : "border-panel-border bg-panel-box text-ink hover:bg-white",
+          )}
+        >
+          <CameraIcon />
+          {lang === "en" ? "Camera" : "Kamera"}
+        </button>
+      )}
       <div
         className={cn(
-          "ml-auto flex items-center gap-1.5 border px-2 py-1 text-xs font-bold",
+          !camera && "ml-auto",
+          "flex items-center gap-1.5 border px-2 py-1 text-xs font-bold",
           STATUS_STYLES[status.state],
         )}
       >
