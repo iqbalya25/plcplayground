@@ -318,6 +318,7 @@ export interface WiringCanvasProps {
   badWireIds: ReadonlySet<string>;
   pressed: ReadonlySet<string>;
   litLamps: ReadonlySet<string>;
+  poweredOn: boolean;
   onPress: (key: string) => void;
   onRelease: (key: string) => void;
 }
@@ -328,6 +329,7 @@ export function WiringCanvas({
   badWireIds,
   pressed,
   litLamps,
+  poweredOn,
   onPress,
   onRelease,
 }: WiringCanvasProps) {
@@ -496,6 +498,16 @@ export function WiringCanvas({
   ];
 
   const hasSelection = api.selectedWireId !== null;
+  // Static 220VAC source box (tune these four numbers to taste)
+  // Static 220VAC source box: vertically centered on the button row
+  const sourceScale = 1.25; // 1.2–1.3 = 20–30% bigger
+  const pb1 = PANEL_COMPONENTS.find((c) => c.key === "PB1");
+  const rowCy = pb1 ? pb1.y + pb1.h / 2 : 80;
+  const sourceH = 56 * sourceScale;
+  const sourceW =
+    Math.max(120, Math.abs(mcbIn[1].x - mcbIn[0].x) + 70) * sourceScale;
+  const sourceCx = (mcbIn[0].x + mcbIn[1].x) / 2;
+  const sourceTop = rowCy - sourceH / 2;
 
   return (
     <>
@@ -533,26 +545,51 @@ export function WiringCanvas({
           return null;
         })}
 
-        <g>
+        {/* Static 220VAC source: pre-wired, not in api.wires, so it can never be selected or deleted */}
+        <g pointerEvents="none">
           {mcbIn.map((p, i) => (
-            <path
+            <line
               key={i}
-              d={`M ${p.x} ${p.y - 55} L ${p.x} ${p.y}`}
-              fill="none"
-              stroke="#9aa0a6"
+              x1={p.x}
+              y1={sourceTop + sourceH}
+              x2={p.x}
+              y2={p.y}
+              stroke="#1d2023"
               strokeWidth={3.5}
-              strokeDasharray="2 4"
+              strokeLinecap="round"
             />
           ))}
+          <rect
+            x={sourceCx - sourceW / 2}
+            y={sourceTop}
+            width={sourceW}
+            height={sourceH}
+            fill={poweredOn ? "#ffd400" : "#ffffff"}
+            stroke="#1d2023"
+            strokeWidth={2.5}
+            style={{ transition: "fill 150ms" }}
+          />
           <text
-            x={(mcbIn[0].x + mcbIn[1].x) / 2}
-            y={mcbIn[0].y - 63}
+            x={sourceCx}
+            y={sourceTop + sourceH / 2 - 5}
             textAnchor="middle"
-            fontSize={10}
-            fill="#8a9096"
+            fontSize={14 * sourceScale}
+            fontWeight={700}
+            fill="#1d2023"
             fontFamily="Consolas, monospace"
           >
-            220VAC (pre-wired)
+            POWER
+          </text>
+          <text
+            x={sourceCx}
+            y={sourceTop + sourceH / 2 + 16}
+            textAnchor="middle"
+            fontSize={14 * sourceScale}
+            fontWeight={700}
+            fill="#1d2023"
+            fontFamily="Consolas, monospace"
+          >
+            220 VAC
           </text>
         </g>
 

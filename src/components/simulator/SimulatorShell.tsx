@@ -250,6 +250,7 @@ export function SimulatorShell() {
             badWireIds={badWireIds}
             pressed={pressedButtons}
             litLamps={litLamps}
+            poweredOn={poweredOn}
             onPress={handlePress}
             onRelease={handleRelease}
           />
