@@ -32,7 +32,7 @@ export function SimulatorShell() {
   const [pressedButtons, setPressedButtons] = React.useState<
     ReadonlySet<string>
   >(new Set());
-  const lampFeedback = useLampFeedback(poweredOn);
+  const { lamps: lampFeedback, backendPoweredOn } = useLampFeedback(poweredOn);
 
   // A lamp lights only when BOTH are true:
   //  1. the FX5U's real output is ON (read back through the Haiwell), and
@@ -58,8 +58,35 @@ export function SimulatorShell() {
     return lit;
   }, [evaluation.tasks, poweredOn, lampFeedback]);
 
+  /* ---------- Re-sync: backend lost its power flag (restart) while the UI is ON ---------- */
+  const resyncingRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!poweredOn || backendPoweredOn !== false || resyncingRef.current)
+      return;
+    if (evaluation.dangers.length > 0) {
+      setPoweredOn(false);
+      return;
+    }
+    resyncingRef.current = true;
+    powerOn(
+      api.wires.map((w) => ({ from: w.from, to: w.to })),
+      false,
+      [...pressedButtons],
+    )
+      .catch(() => null)
+      .finally(() => {
+        resyncingRef.current = false;
+      });
+  }, [
+    poweredOn,
+    backendPoweredOn,
+    evaluation.dangers.length,
+    api.wires,
+    pressedButtons,
+  ]);
+
   usePublishHeaderStatus({
-    label: plcReady ? "PLC Connected" : "Server disconnected",
+    label: plcReady ? "Server Connected" : "Server disconnected",
     state: plcReady ? "ok" : "error",
   });
 

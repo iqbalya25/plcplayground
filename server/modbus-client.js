@@ -21,7 +21,7 @@ const PLC_IP = process.env.PLC_IP || "192.168.0.111";
 const PLC_PORT = Number(process.env.PLC_PORT || 502);
 
 const SM0_ADDRESS = 16896; // 0x4200 — PLC run flag (always ON while running)
-const HEARTBEAT_MS = 5000; // SM0 probe interval
+const HEARTBEAT_MS = 1000; // SM0 probe + coil read-back interval
 const RECONNECT_MS = 3000; // wait between reconnect attempts
 const MODBUS_TIMEOUT_MS = 2000;
 
@@ -46,6 +46,8 @@ const LAMP_INPUTS = { Y0: 0, Y1: 1, Y4: 2, Y5: 3 };
 const LAMP_POLL_MS = 300;
 const LAMP_FIRST = Math.min(...Object.values(LAMP_INPUTS));
 const LAMP_COUNT = Math.max(...Object.values(LAMP_INPUTS)) - LAMP_FIRST + 1;
+const COIL_FIRST = Math.min(...PLAYGROUND_COILS);
+const COIL_COUNT = Math.max(...PLAYGROUND_COILS) - COIL_FIRST + 1;
 
 // ---------- internal state ---------------------------------------------------
 
@@ -65,6 +67,7 @@ const desiredState = Object.fromEntries(
 let reconnecting = false;
 let heartbeatTimer = null;
 
+let heartbeatBusy = false;
 let lampTimer = null;
 let lampPollBusy = false;
 let lampPollFailing = false;
@@ -144,9 +147,28 @@ async function writeAll(value) {
   }
 }
 
-async function writeDesired() {
+async function writeDesired(force = false) {
   for (const address of PLAYGROUND_COILS) {
-    if (lastState[address] !== desiredState[address]) {
+    if (force || lastState[address] !== desiredState[address]) {
+      await writeCoilConfirmed(address, desiredState[address]);
+    }
+  }
+}
+
+/** Read the real relay state back and heal anything that drifted from desiredState. */
+async function verifyCoils() {
+  const res = await client.readCoils(COIL_FIRST, COIL_COUNT); // FC01
+  const drifted = [];
+  for (const address of PLAYGROUND_COILS) {
+    const actual = Boolean(res.data[address - COIL_FIRST]);
+    lastState[address] = actual; // memory follows reality, not the other way round
+    if (actual !== desiredState[address]) drifted.push(address);
+  }
+  if (drifted.length > 0) {
+    console.warn(
+      `[plc] drift on ${drifted.length} coil(s) (${drifted.join(", ")}) — re-asserting`,
+    );
+    for (const address of drifted) {
       await writeCoilConfirmed(address, desiredState[address]);
     }
   }
@@ -203,7 +225,8 @@ function getStatus() {
 // ---------- heartbeat ----------------------------------------------------------
 
 async function heartbeat() {
-  if (reconnecting) return; // reconnect loop owns the socket right now
+  if (reconnecting || heartbeatBusy) return; // reconnect owns the socket; never stack ticks
+  heartbeatBusy = true;
 
   try {
     const res = await enqueue(() => client.readCoils(SM0_ADDRESS, 1)); // FC01
@@ -214,12 +237,20 @@ async function heartbeat() {
     if (previous !== plcStatus) {
       console.log(`[plc] status: ${previous} -> ${plcStatus}`);
     }
-    if (previous === "stopped" && plcStatus === "running") {
-      // PLC came back to RUN — make sure physical outputs match memory.
-      await enqueue(() => writeDesired());
+    if (plcStatus === "running") {
+      if (previous === "stopped") {
+        // Back in RUN (e.g. after a program download wiped the relays):
+        // memory can't be trusted, so force every coil instead of diffing.
+        await enqueue(() => writeDesired(true));
+      } else {
+        // Normal tick: read the relays back and heal any drift.
+        await enqueue(() => verifyCoils());
+      }
     }
   } catch (err) {
     markDisconnected(`heartbeat failed: ${err.message}`);
+  } finally {
+    heartbeatBusy = false;
   }
 }
 

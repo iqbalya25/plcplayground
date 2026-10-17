@@ -8,19 +8,27 @@ const POLL_MS = 300;
 type Lamps = Readonly<Record<string, boolean>>;
 const NONE: Lamps = {};
 
-function same(a: Lamps, b: Lamps): boolean {
-  const ka = Object.keys(a);
-  const kb = Object.keys(b);
-  return ka.length === kb.length && ka.every((k) => a[k] === b[k]);
+export interface LampFeedback {
+  lamps: Lamps;
+  /** Backend's own power flag. null = unknown (disabled or bridge unreachable). */
+  backendPoweredOn: boolean | null;
+}
+const IDLE: LampFeedback = { lamps: NONE, backendPoweredOn: null };
+
+function same(a: LampFeedback, b: LampFeedback): boolean {
+  if (a.backendPoweredOn !== b.backendPoweredOn) return false;
+  const ka = Object.keys(a.lamps);
+  const kb = Object.keys(b.lamps);
+  return ka.length === kb.length && ka.every((k) => a.lamps[k] === b.lamps[k]);
 }
 
-/** Real FX5U output state (Y0, Y1, Y4, Y5 -> true/false) via the backend. */
-export function useLampFeedback(enabled: boolean): Lamps {
-  const [lamps, setLamps] = React.useState<Lamps>(NONE);
+/** Real FX5U output state (Y0, Y1, Y4, Y5) plus the backend's power flag. */
+export function useLampFeedback(enabled: boolean): LampFeedback {
+  const [fb, setFb] = React.useState<LampFeedback>(IDLE);
 
   React.useEffect(() => {
     if (!enabled) {
-      setLamps(NONE);
+      setFb(IDLE);
       return;
     }
     let alive = true;
@@ -31,12 +39,13 @@ export function useLampFeedback(enabled: boolean): Lamps {
       busy = true;
       try {
         const data = await fetchLamps();
-        const next = data.lamps ?? NONE;
-        // Keep the old object when nothing changed, so the canvas
-        // does not re-render three times a second for nothing.
-        if (alive) setLamps((prev) => (same(prev, next) ? prev : next));
+        const next: LampFeedback = {
+          lamps: data.lamps ?? NONE,
+          backendPoweredOn: data.poweredOn,
+        };
+        if (alive) setFb((prev) => (same(prev, next) ? prev : next));
       } catch {
-        if (alive) setLamps(NONE);
+        if (alive) setFb(IDLE);
       } finally {
         busy = false;
       }
@@ -50,5 +59,5 @@ export function useLampFeedback(enabled: boolean): Lamps {
     };
   }, [enabled]);
 
-  return lamps;
+  return fb;
 }

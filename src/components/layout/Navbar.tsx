@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useHeaderStatus } from "./HeaderStatusContext";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
+import { FlagIcon } from "./FlagIcon";
 
 const TABS = [
   { href: "/", label: "Wiring Simulator" },
@@ -61,9 +62,16 @@ export function Navbar() {
       </div>
       <button
         onClick={() => setLang(lang === "en" ? "id" : "en")}
-        className="border border-panel-border px-2 py-1 text-xs font-bold uppercase"
+        className="flex items-center gap-1.5 border border-panel-border px-2 py-1 text-xs font-bold uppercase"
+        title={
+          lang === "en" ? "Switch to Bahasa Indonesia" : "Switch to English"
+        }
+        aria-label={
+          lang === "en" ? "Switch to Bahasa Indonesia" : "Switch to English"
+        }
       >
-        {lang === "en" ? "🇬🇧 EN" : "🇮🇩 ID"}
+        <FlagIcon lang={lang} />
+        {lang === "en" ? "EN" : "ID"}
       </button>
     </header>
   );
