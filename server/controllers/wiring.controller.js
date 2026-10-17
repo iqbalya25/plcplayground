@@ -65,3 +65,7 @@ exports.postReset = async (_req, res) => {
 exports.getStatus = (_req, res) => {
   res.json(service.getStatus());
 };
+
+exports.getLamps = (_req, res) => {
+  res.json(service.getLamps());
+};

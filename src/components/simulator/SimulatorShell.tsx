@@ -5,7 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useWiring } from "@/lib/wiring/hooks/use-wiring";
 import { dangerCheck, polarityCheck } from "@/lib/wiring/engine/feedback";
-import { PANEL_COMPONENTS } from "@/lib/wiring/config/panel";
+import {
+  PANEL_COMPONENTS,
+  LAMP_KEYS,
+  REQUIRED_Y,
+  Y_COM_GROUPS,
+} from "@/lib/wiring/config/panel";
+import { useLampFeedback } from "@/lib/plc/use-lamp-feedback";
 import { usePlcStatus } from "@/lib/plc/use-plc-status";
 import { sendWiring, resetPlc, powerOff, powerOn } from "@/lib/plc/plc-api";
 import { WiringCanvas } from "./WiringCanvas";
@@ -26,7 +32,31 @@ export function SimulatorShell() {
   const [pressedButtons, setPressedButtons] = React.useState<
     ReadonlySet<string>
   >(new Set());
-  const [litLamps] = React.useState<ReadonlySet<string>>(new Set());
+  const lampFeedback = useLampFeedback(poweredOn);
+
+  // A lamp lights only when BOTH are true:
+  //  1. the FX5U's real output is ON (read back through the Haiwell), and
+  //  2. the student wired that lamp: drive, +24V return, and the COM group.
+  const litLamps = React.useMemo<ReadonlySet<string>>(() => {
+    const lit = new Set<string>();
+    if (!poweredOn) return lit;
+    const done = new Set(
+      evaluation.tasks.filter((t) => t.done).map((t) => t.id),
+    );
+    for (const key of LAMP_KEYS) {
+      const y = REQUIRED_Y[key];
+      const group = Object.entries(Y_COM_GROUPS).find(([, ys]) =>
+        ys.includes(y),
+      )?.[0];
+      const wired =
+        done.has(`${key}-signal`) &&
+        done.has(`${key}-return`) &&
+        group !== undefined &&
+        done.has(`com-${group}`);
+      if (wired && lampFeedback[y]) lit.add(key);
+    }
+    return lit;
+  }, [evaluation.tasks, poweredOn, lampFeedback]);
 
   usePublishHeaderStatus({
     label: plcReady ? "PLC Connected" : "Server disconnected",

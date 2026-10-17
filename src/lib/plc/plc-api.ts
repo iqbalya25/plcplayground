@@ -54,3 +54,14 @@ export async function powerOff(): Promise<PlcResponse> {
   const res = await fetch("/api/plc/power/off", { method: "POST" });
   return res.json();
 }
+
+export interface LampsResponse {
+  poweredOn: boolean;
+  /** FX5U output address -> really ON (read back through the Haiwell) */
+  lamps: Record<string, boolean>;
+}
+
+export async function fetchLamps(): Promise<LampsResponse> {
+  const res = await fetch("/api/plc/lamps", { cache: "no-store" });
+  return res.json();
+}

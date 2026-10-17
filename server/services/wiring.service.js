@@ -23,6 +23,13 @@ const PRESS_COILS = { X0: 3123, X1: 3124, X6: 3125, X7: 3126 }; // M51-M54 — s
 
 let poweredOn = false;
 
+/** Jumper blocks are internally common — mirrors net() in src/lib/wiring/engine/net.ts. */
+function net(t) {
+  if (t.startsWith("TB24.")) return "TB24";
+  if (t.startsWith("TB0.")) return "TB0";
+  return t;
+}
+
 function buildConnectivity(wires) {
   const parent = new Map();
   function find(x) {
@@ -42,11 +49,13 @@ function buildConnectivity(wires) {
     const rb = find(b);
     if (ra !== rb) parent.set(ra, rb);
   }
-  for (const w of wires) union(w.from, w.to);
+  for (const w of wires) union(net(w.from), net(w.to));
   return {
     connected(a, b) {
-      if (!parent.has(a) || !parent.has(b)) return a === b;
-      return find(a) === find(b);
+      const na = net(a);
+      const nb = net(b);
+      if (!parent.has(na) || !parent.has(nb)) return na === nb;
+      return find(na) === find(nb);
     },
   };
 }
@@ -138,4 +147,15 @@ function getStatus() {
   return { poweredOn, ...plc.getStatus() };
 }
 
-module.exports = { syncWiring, powerOn, powerOff, resetAll, getStatus };
+function getLamps() {
+  return { poweredOn, lamps: plc.getLamps() };
+}
+
+module.exports = {
+  syncWiring,
+  powerOn,
+  powerOff,
+  resetAll,
+  getStatus,
+  getLamps,
+};

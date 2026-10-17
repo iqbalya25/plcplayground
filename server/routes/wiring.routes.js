@@ -8,5 +8,6 @@ router.post("/power/on", controller.postPowerOn);
 router.post("/power/off", controller.postPowerOff);
 router.post("/reset", controller.postReset);
 router.get("/status", controller.getStatus);
+router.get("/lamps", controller.getLamps);
 
 module.exports = router;

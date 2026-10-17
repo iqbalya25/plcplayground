@@ -27,7 +27,25 @@ const MODBUS_TIMEOUT_MS = 2000;
 
 // Every playground coil the backend is allowed to touch.
 // Add new relay coils here as scenarios grow.
-const PLAYGROUND_COILS = [3072, 3122, 3073, 3074, 3123, 3124];
+const PLAYGROUND_COILS = [
+  3072,
+  3122,
+  3073,
+  3074,
+  3075,
+  3076, // M1–M4   wiring correctness (X0, X1, X6, X7)
+  3123,
+  3124,
+  3125,
+  3126, // M51–M54 simulated press    (X0, X1, X6, X7)
+];
+
+// ---------- lamp feedback: FX5U Y output -> Haiwell input (FC02) --------------
+// Keys are FX5U output addresses; values are Haiwell discrete-input addresses.
+const LAMP_INPUTS = { Y0: 0, Y1: 1, Y4: 2, Y5: 3 };
+const LAMP_POLL_MS = 300;
+const LAMP_FIRST = Math.min(...Object.values(LAMP_INPUTS));
+const LAMP_COUNT = Math.max(...Object.values(LAMP_INPUTS)) - LAMP_FIRST + 1;
 
 // ---------- internal state ---------------------------------------------------
 
@@ -46,6 +64,13 @@ const desiredState = Object.fromEntries(
 
 let reconnecting = false;
 let heartbeatTimer = null;
+
+let lampTimer = null;
+let lampPollBusy = false;
+let lampPollFailing = false;
+const lampState = Object.fromEntries(
+  Object.keys(LAMP_INPUTS).map((y) => [y, false]),
+);
 
 // ---------- write queue ------------------------------------------------------
 // Modbus TCP on compact PLCs behaves best with one transaction in flight.
@@ -198,15 +223,54 @@ async function heartbeat() {
   }
 }
 
+// ---------- lamp feedback poll (FC02) -------------------------------------------
+
+function clearLamps() {
+  for (const y of Object.keys(lampState)) lampState[y] = false;
+}
+
+async function pollLamps() {
+  if (plcStatus !== "running") {
+    clearLamps();
+    return;
+  }
+  if (lampPollBusy || reconnecting) return; // never stack polls
+
+  lampPollBusy = true;
+  try {
+    const res = await enqueue(() =>
+      client.readDiscreteInputs(LAMP_FIRST, LAMP_COUNT),
+    ); // FC02
+    for (const [y, address] of Object.entries(LAMP_INPUTS)) {
+      lampState[y] = Boolean(res.data[address - LAMP_FIRST]);
+    }
+    lampPollFailing = false;
+  } catch (err) {
+    clearLamps(); // heartbeat() owns disconnect detection
+    if (!lampPollFailing) {
+      console.warn(`[plc] lamp poll failed: ${err.message}`);
+    }
+    lampPollFailing = true;
+  } finally {
+    lampPollBusy = false;
+  }
+}
+
+function getLamps() {
+  return { ...lampState };
+}
+
 // ---------- startup -------------------------------------------------------------
 
 async function start() {
   scheduleReconnect(); // initial connect uses the same recovery path
   heartbeatTimer = setInterval(heartbeat, HEARTBEAT_MS);
+  lampTimer = setInterval(pollLamps, LAMP_POLL_MS);
 }
 
 async function stop() {
   clearInterval(heartbeatTimer);
+  clearInterval(lampTimer);
   try {
     // Leave the hardware safe on shutdown.
     await enqueue(() => writeAll(false));
@@ -226,5 +290,6 @@ module.exports = {
   applyState,
   resetAll,
   getStatus,
+  getLamps,
   PLAYGROUND_COILS,
 };

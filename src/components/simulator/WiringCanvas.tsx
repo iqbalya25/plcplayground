@@ -20,8 +20,8 @@ const STATIC_ADDRESS: Record<string, string> = {
   PB4: "X7",
   LAMP1: "Y0",
   LAMP2: "Y1",
-  LAMP3: "Y2",
-  LAMP4: "Y3",
+  LAMP3: "Y4",
+  LAMP4: "Y5",
 };
 
 /* ---------- geometry helpers ---------- */
