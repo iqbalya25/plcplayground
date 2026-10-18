@@ -4,7 +4,7 @@ import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useWiring } from "@/lib/wiring/hooks/use-wiring";
-import { dangerCheck, polarityCheck } from "@/lib/wiring/engine/feedback";
+import { polarityCheck } from "@/lib/wiring/engine/feedback";
 import {
   PANEL_COMPONENTS,
   LAMP_KEYS,
@@ -33,6 +33,16 @@ export function SimulatorShell() {
   const { lang } = useLanguage();
 
   const [poweredOn, setPoweredOn] = React.useState(false);
+  const [lockNotice, setLockNotice] = React.useState(false);
+  const lockTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showLockNotice = React.useCallback(() => {
+    setLockNotice(true);
+    if (lockTimer.current) clearTimeout(lockTimer.current);
+    lockTimer.current = setTimeout(() => setLockNotice(false), 6000);
+  }, []);
+  React.useEffect(() => {
+    if (!poweredOn) setLockNotice(false);
+  }, [poweredOn]);
   const [pressedButtons, setPressedButtons] = React.useState<
     ReadonlySet<string>
   >(new Set());
@@ -123,15 +133,23 @@ export function SimulatorShell() {
   }, [api.wires, pressedButtons, poweredOn]);
 
   const liveMessages = React.useMemo<Message[]>(() => {
+    const lockMsgs: Message[] = lockNotice
+      ? [{ kind: "warn", text: translateMessage("wire-locked", lang) }]
+      : [];
     if (evaluation.dangers.length > 0) {
-      return evaluation.dangers.map((d) => ({
-        kind: "err",
-        text: translateMessage(d.messageKey, lang),
-      }));
+      const keys = [...new Set(evaluation.dangers.map((d) => d.messageKey))];
+      return [
+        ...lockMsgs,
+        ...keys.map((k) => ({
+          kind: "err" as const,
+          text: translateMessage(k, lang),
+        })),
+      ];
     }
     if (evaluation.complete) {
       return [
         {
+          ...lockMsgs,
           kind: "ok",
           text: translateMessage(
             plcReady ? "all-correct-live" : "all-correct-pending",
@@ -142,18 +160,26 @@ export function SimulatorShell() {
     }
     if (plcStatus === "disconnected") {
       return [
-        { kind: "warn", text: translateMessage("server-disconnected", lang) },
+        {
+          ...lockMsgs,
+          kind: "warn",
+          text: translateMessage("server-disconnected", lang),
+        },
         ...hintMessages,
       ];
     }
     if (plcStatus === "stopped") {
       return [
-        { kind: "warn", text: translateMessage("plc-stopped", lang) },
+        {
+          ...lockMsgs,
+          kind: "warn",
+          text: translateMessage("plc-stopped", lang),
+        },
         ...hintMessages,
       ];
     }
-    return hintMessages;
-  }, [evaluation, hintMessages, plcStatus, plcReady, lang]);
+    return [...lockMsgs, ...hintMessages];
+  }, [evaluation, hintMessages, plcStatus, plcReady, lang, lockNotice]);
 
   async function handleTogglePower() {
     if (poweredOn) {
@@ -196,9 +222,11 @@ export function SimulatorShell() {
     });
     for (const w of api.wires) {
       if (evaluation.okWireIds.has(w.id)) continue;
-      const dangerKey = dangerCheck(w.from, w.to);
-      if (dangerKey) {
-        msgs.push({ kind: "err", text: translateMessage(dangerKey, lang) });
+      const danger = evaluation.dangers.find((d) => d.wireId === w.id);
+      if (danger) {
+        const text = translateMessage(danger.messageKey, lang);
+        if (!msgs.some((m) => m.text === text))
+          msgs.push({ kind: "err", text });
         continue;
       }
       // Only S/S and COM are app-wide conventions worth spelling out —
@@ -262,6 +290,8 @@ export function SimulatorShell() {
             pressed={pressedButtons}
             litLamps={litLamps}
             poweredOn={poweredOn}
+            locked={poweredOn}
+            onLockedAttempt={showLockNotice}
             onPress={handlePress}
             onRelease={handleRelease}
           />
@@ -327,7 +357,11 @@ export function SimulatorShell() {
             <Button
               variant="destructive"
               size="sm"
-              onClick={() => api.deleteWire(api.selectedWireId!)}
+              onClick={() =>
+                poweredOn
+                  ? showLockNotice()
+                  : api.deleteWire(api.selectedWireId!)
+              }
             >
               {lang === "en" ? "DELETE WIRE" : "HAPUS KABEL"}
             </Button>

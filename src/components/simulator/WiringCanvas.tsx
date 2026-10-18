@@ -9,7 +9,6 @@ import {
   BUTTON_CAP,
   LAMP_ON_IMAGE,
 } from "@/lib/wiring/config/panel";
-import { dangerCheck } from "@/lib/wiring/engine/feedback";
 import { CABLE_COLORS } from "@/lib/wiring/hooks/use-wiring";
 import type { WiringApi } from "@/lib/wiring/hooks/use-wiring";
 
@@ -321,6 +320,8 @@ export interface WiringCanvasProps {
   poweredOn: boolean;
   onPress: (key: string) => void;
   onRelease: (key: string) => void;
+  locked: boolean;
+  onLockedAttempt: () => void;
 }
 
 export function WiringCanvas({
@@ -332,6 +333,8 @@ export function WiringCanvas({
   poweredOn,
   onPress,
   onRelease,
+  locked,
+  onLockedAttempt,
 }: WiringCanvasProps) {
   const svgRef = React.useRef<SVGSVGElement>(null);
   const [cursor, setCursor] = React.useState<Point | null>(null);
@@ -392,7 +395,8 @@ export function WiringCanvas({
       }
       if ((e.key === "Delete" || e.key === "Backspace") && api.selectedWireId) {
         e.preventDefault();
-        api.deleteWire(api.selectedWireId);
+        if (locked) onLockedAttempt();
+        else api.deleteWire(api.selectedWireId);
       }
     };
     const up = (e: KeyboardEvent) => {
@@ -404,7 +408,7 @@ export function WiringCanvas({
       window.removeEventListener("keydown", down);
       window.removeEventListener("keyup", up);
     };
-  }, [api]);
+  }, [api, locked, onLockedAttempt]);
 
   const onMouseDown = (e: React.MouseEvent) => {
     const middle = e.button === 1;
@@ -490,7 +494,8 @@ export function WiringCanvas({
 
   /** Errors only: red dashed. Correct cables keep their body color. */
   const isWrong = (w: Wire): boolean =>
-    Boolean(dangerCheck(w.from, w.to)) || badWireIds.has(w.id);
+    api.evaluation.dangers.some((d) => d.wireId === w.id) ||
+    badWireIds.has(w.id);
 
   const mcbIn = [
     terminalPosition("MCB", "L1_IN"),
@@ -681,7 +686,10 @@ export function WiringCanvas({
             <button
               key={c.value}
               title={c.name}
-              onClick={() => api.setDrawColor(c.value)}
+              onClick={() => {
+                if (locked && api.selectedWireId) onLockedAttempt();
+                else api.setDrawColor(c.value);
+              }}
               className={`h-6 w-6 border-2 transition-transform ${
                 active
                   ? "scale-110 border-[#e6a800]"

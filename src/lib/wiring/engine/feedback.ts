@@ -1,5 +1,5 @@
-import { net } from "./net";
-import type { TerminalId } from "../types";
+import { net, buildComponents } from "./net";
+import type { DangerHit, TerminalId, Wire } from "../types";
 
 const AC_TERMS = new Set([
   "MCB.L1_IN",
@@ -75,4 +75,35 @@ export function polarityCheck(
   if (match(/^LAMP\d\.SP\d$/)) return "lamp-spare";
   if (na === nb) return "same-net";
   return null;
+}
+
+const L_NODES = ["MCB.L1_IN", "MCB.L1_OUT", "PLC.L", "PSU.L_IN"];
+const N_NODES = ["MCB.L2_IN", "MCB.L2_OUT", "PLC.N", "PSU.N_IN"];
+const V24_NODES = ["PSU.24VDC", "TB24"];
+const V0_NODES = ["PSU.0VDC", "TB0"];
+
+/**
+ * Faults that only exist once wires are chained, e.g. +24V and 0V both
+ * landing on the same lamp or button terminal. Every wire sitting on the
+ * faulty electrical net is reported.
+ */
+export function componentDangers(wires: readonly Wire[]): DangerHit[] {
+  const conn = buildComponents(wires);
+  const dcTerms = [
+    ...new Set(wires.flatMap((w) => [net(w.from), net(w.to)])),
+  ].filter(isDCNet);
+  const hits: DangerHit[] = [];
+  for (const w of wires) {
+    const t = w.from;
+    const on = (group: string[]) => group.some((g) => conn.connected(t, g));
+    const hasL = on(L_NODES);
+    const hasN = on(N_NODES);
+    let key: DangerKey | null = null;
+    if (hasL && hasN) key = "short-l1-l2";
+    else if (on(V24_NODES) && on(V0_NODES)) key = "short-24-0";
+    else if ((hasL || hasN) && dcTerms.some((d) => conn.connected(t, d)))
+      key = "ac-dc-contact";
+    if (key) hits.push({ wireId: w.id, messageKey: key });
+  }
+  return hits;
 }

@@ -1,6 +1,6 @@
 import type { EvalResult, TaskResult, Wire } from "../types";
 import { buildComponents, net } from "./net";
-import { dangerCheck } from "./feedback";
+import { dangerCheck, componentDangers } from "./feedback";
 import {
   BUTTON_KEYS,
   LAMP_KEYS,
@@ -39,10 +39,15 @@ export function evaluate(wires: readonly Wire[]): EvalResult {
   const tasks: TaskResult[] = [];
   const assignments: Record<string, string> = {};
 
-  const dangers = wires.flatMap((w) => {
+  const directDangers = wires.flatMap((w) => {
     const key = dangerCheck(w.from, w.to);
     return key ? [{ wireId: w.id, messageKey: key }] : [];
   });
+  const flagged = new Set(directDangers.map((d) => d.wireId));
+  const dangers = [
+    ...directDangers,
+    ...componentDangers(wires).filter((d) => !flagged.has(d.wireId)),
+  ];
 
   /* ---------- source nets --------------------------------------- */
   // A terminal is "on" a net if it connects to the source OR to the

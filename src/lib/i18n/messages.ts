@@ -85,6 +85,10 @@ export const MESSAGES: Record<string, MsgEntry> = {
     en: "// Panel reset. Start from MCB L1/L2 OUT.",
     id: "// Panel direset. Mulai dari MCB L1/L2 OUT.",
   },
+  "wire-locked": {
+    en: "⚠ To delete or edit a wire, power must be turned off first for safety.",
+    id: "⚠ Untuk menghapus atau mengedit kabel, power perlu dimatikan terlebih dahulu untuk safety.",
+  },
   "initial-hint": {
     en: "// MCB input is pre-wired to 220VAC. Start from MCB L1/L2 OUT. Correct wires turn green automatically — each button and lamp has a specific X/Y address, check the checklist.",
     id: "// Input MCB sudah pre-wired ke 220VAC. Mulai dari MCB L1/L2 OUT. Kabel yang benar otomatis jadi hijau — setiap tombol dan lampu punya alamat X/Y tertentu, cek checklist.",
