@@ -454,8 +454,10 @@ export function WiringCanvas({
       suppressClickRef.current = false;
       return;
     }
-    if (!api.draft) api.startDraft(id, termPos(id));
-    else if (api.draft.from !== id) api.commitDraft(id, termPos(id));
+    if (!api.draft) {
+      if (locked) onLockedAttempt();
+      else api.startDraft(id, termPos(id));
+    } else if (api.draft.from !== id) api.commitDraft(id, termPos(id));
   };
 
   const handleCanvasClick = (e: React.MouseEvent) => {
@@ -467,6 +469,9 @@ export function WiringCanvas({
     else api.selectWire(null);
   };
 
+  React.useEffect(() => {
+    if (locked && api.draft) api.cancelDraft();
+  }, [locked, api]);
   /**
    * Overlap-aware wire selection with click-cycling:
    * find every cable within tolerance of the click point; if the current
