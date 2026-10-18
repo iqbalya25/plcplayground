@@ -140,8 +140,8 @@ export const PANEL_COMPONENTS: ComponentDef[] = [
     [
       ["PB1", "NO"],
       ["PB2", "NO"],
-      ["PB3", "NO"],
-      ["PB4", "NC"],
+      ["PB3", "NC"],
+      // ["PB4", "NC"],
     ] as const
   ).map(
     ([key, contactType], i): ComponentDef => ({
@@ -167,7 +167,7 @@ export const PANEL_COMPONENTS: ComponentDef[] = [
       ["LAMP1", "/images/PLgreendark.webp"],
       ["LAMP2", "/images/PLgreendark.webp"],
       ["LAMP3", "/images/PLreddark.webp"],
-      ["LAMP4", "/images/PLreddark.webp"],
+      // ["LAMP4", "/images/PLreddark.webp"],
     ] as const
   ).map(
     ([key, imageSrc], i): ComponentDef => ({
@@ -210,8 +210,11 @@ export const PANEL_COMPONENTS: ComponentDef[] = [
 /** FX3U-48M output common groups (from the terminal strip layout). */
 export const Y_COM_GROUPS: Record<string, string[]> = activeModel().comGroups;
 
-export const BUTTON_KEYS = ["PB1", "PB2", "PB3", "PB4"] as const;
-export const LAMP_KEYS = ["LAMP1", "LAMP2", "LAMP3", "LAMP4"] as const;
+// export const BUTTON_KEYS = ["PB1", "PB2", "PB3", "PB4"] as const;
+// export const LAMP_KEYS = ["LAMP1", "LAMP2", "LAMP3", "LAMP4"] as const;
+
+export const BUTTON_KEYS = ["PB1", "PB2", "PB3"] as const;
+export const LAMP_KEYS = ["LAMP1", "LAMP2", "LAMP3"] as const;
 
 /**
  * Fixed address scenario — deliberately non-sequential (X0, X1, X6, X7 /
@@ -219,18 +222,30 @@ export const LAMP_KEYS = ["LAMP1", "LAMP2", "LAMP3", "LAMP4"] as const;
  * assuming "button 1 = X0, button 2 = X1...". Y0/Y1 share COM0, Y4/Y5
  * share COM1 — teaches that COM is a separate common per group.
  */
+// export const REQUIRED_X: Record<string, string> = {
+//   PB1: "X0",
+//   PB2: "X1",
+//   PB3: "X6",
+//   PB4: "X7",
+// };
+
+// export const REQUIRED_Y: Record<string, string> = {
+//   LAMP1: "Y0",
+//   LAMP2: "Y1",
+//   LAMP3: "Y4",
+//   LAMP4: "Y5",
+// };
+
 export const REQUIRED_X: Record<string, string> = {
   PB1: "X0",
   PB2: "X1",
   PB3: "X6",
-  PB4: "X7",
 };
 
 export const REQUIRED_Y: Record<string, string> = {
   LAMP1: "Y0",
   LAMP2: "Y1",
-  LAMP3: "Y4",
-  LAMP4: "Y5",
+  LAMP3: "Y2",
 };
 
 export const X_INPUTS = Object.keys(

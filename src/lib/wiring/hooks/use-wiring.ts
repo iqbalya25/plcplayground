@@ -41,7 +41,8 @@ type Action =
 let wireSeq = 0;
 const nextWireId = () => `w${++wireSeq}`;
 
-const STORAGE_KEY = "plc-playground-wiring-v1";
+// const STORAGE_KEY = "plc-playground-wiring-v1";
+const STORAGE_KEY = "plc-playground-wiring-v2";
 
 function loadWires(): Wire[] {
   try {

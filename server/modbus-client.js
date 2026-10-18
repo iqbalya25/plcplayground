@@ -27,22 +27,34 @@ const MODBUS_TIMEOUT_MS = 2000;
 
 // Every playground coil the backend is allowed to touch.
 // Add new relay coils here as scenarios grow.
+// const PLAYGROUND_COILS = [
+//   3072,
+//   3122,
+//   3073,
+//   3074,
+//   3075,
+//   3076, // M1–M4   wiring correctness (X0, X1, X6, X7)
+//   3123,
+//   3124,
+//   3125,
+//   3126, // M51–M54 simulated press    (X0, X1, X6, X7)
+// ];
+
 const PLAYGROUND_COILS = [
   3072,
   3122,
   3073,
   3074,
-  3075,
-  3076, // M1–M4   wiring correctness (X0, X1, X6, X7)
+  3075, // M1–M3   wiring correctness (X0, X1, X6)
   3123,
   3124,
-  3125,
-  3126, // M51–M54 simulated press    (X0, X1, X6, X7)
+  3125, // M51–M53 simulated press    (X0, X1, X6)
 ];
 
 // ---------- lamp feedback: FX5U Y output -> Haiwell input (FC02) --------------
 // Keys are FX5U output addresses; values are Haiwell discrete-input addresses.
-const LAMP_INPUTS = { Y0: 0, Y1: 1, Y4: 2, Y5: 3 };
+// const LAMP_INPUTS = { Y0: 0, Y1: 1, Y4: 2, Y5: 3 };
+const LAMP_INPUTS = { Y0: 0, Y1: 1, Y2: 2 };
 const LAMP_POLL_MS = 300;
 const LAMP_FIRST = Math.min(...Object.values(LAMP_INPUTS));
 const LAMP_COUNT = Math.max(...Object.values(LAMP_INPUTS)) - LAMP_FIRST + 1;

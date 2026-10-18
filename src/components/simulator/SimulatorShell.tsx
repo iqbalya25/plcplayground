@@ -38,11 +38,22 @@ export function SimulatorShell() {
   const showLockNotice = React.useCallback(() => {
     setLockNotice(true);
     if (lockTimer.current) clearTimeout(lockTimer.current);
-    lockTimer.current = setTimeout(() => setLockNotice(false), 6000);
+    lockTimer.current = setTimeout(() => setLockNotice(false), 4000);
   }, []);
   React.useEffect(() => {
     if (!poweredOn) setLockNotice(false);
   }, [poweredOn]);
+
+  const [completeToast, setCompleteToast] = React.useState(false);
+  React.useEffect(() => {
+    if (!evaluation.complete) {
+      setCompleteToast(false);
+      return;
+    }
+    setCompleteToast(true);
+    const t = setTimeout(() => setCompleteToast(false), 4000);
+    return () => clearTimeout(t);
+  }, [evaluation.complete]);
   const [pressedButtons, setPressedButtons] = React.useState<
     ReadonlySet<string>
   >(new Set());
@@ -133,23 +144,16 @@ export function SimulatorShell() {
   }, [api.wires, pressedButtons, poweredOn]);
 
   const liveMessages = React.useMemo<Message[]>(() => {
-    const lockMsgs: Message[] = lockNotice
-      ? [{ kind: "warn", text: translateMessage("wire-locked", lang) }]
-      : [];
     if (evaluation.dangers.length > 0) {
       const keys = [...new Set(evaluation.dangers.map((d) => d.messageKey))];
-      return [
-        ...lockMsgs,
-        ...keys.map((k) => ({
-          kind: "err" as const,
-          text: translateMessage(k, lang),
-        })),
-      ];
+      return keys.map((k) => ({
+        kind: "err" as const,
+        text: translateMessage(k, lang),
+      }));
     }
     if (evaluation.complete) {
       return [
         {
-          ...lockMsgs,
           kind: "ok",
           text: translateMessage(
             plcReady ? "all-correct-live" : "all-correct-pending",
@@ -161,7 +165,6 @@ export function SimulatorShell() {
     if (plcStatus === "disconnected") {
       return [
         {
-          ...lockMsgs,
           kind: "warn",
           text: translateMessage("server-disconnected", lang),
         },
@@ -171,15 +174,14 @@ export function SimulatorShell() {
     if (plcStatus === "stopped") {
       return [
         {
-          ...lockMsgs,
           kind: "warn",
           text: translateMessage("plc-stopped", lang),
         },
         ...hintMessages,
       ];
     }
-    return [...lockMsgs, ...hintMessages];
-  }, [evaluation, hintMessages, plcStatus, plcReady, lang, lockNotice]);
+    return hintMessages;
+  }, [evaluation, hintMessages, plcStatus, plcReady, lang]);
 
   async function handleTogglePower() {
     if (poweredOn) {
@@ -295,13 +297,22 @@ export function SimulatorShell() {
             onPress={handlePress}
             onRelease={handleRelease}
           />
-          {evaluation.complete && (
-            <div className="absolute left-1/2 top-4 -translate-x-1/2 border-2 border-ok bg-[#dcefe1] px-5 py-2 text-sm font-bold text-[#14532d]">
-              {plcReady
-                ? "✓ Wiring complete — physical relays energized. Ready for programming."
-                : "✓ Wiring complete — waiting for PLC connection to energize relays."}
-            </div>
-          )}
+          <div
+            role="status"
+            className={`pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 border-2 border-ok bg-[#dcefe1] px-5 py-2 text-sm font-bold text-[#14532d] transition-opacity duration-500 ${
+              completeToast ? "opacity-100" : "opacity-0"
+            }`}
+          >
+            {translateMessage("wiring-complete-toast", lang)}
+          </div>
+          <div
+            role="status"
+            className={`pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 border-2 border-[#e3cf8a] bg-[#fdf4d2] px-5 py-2 text-sm font-bold text-[#6b5a14] transition-opacity duration-500 ${
+              lockNotice ? "opacity-100" : "opacity-0"
+            }`}
+          >
+            {translateMessage("wire-locked", lang)}
+          </div>
         </div>
 
         {cameraOpen ? (

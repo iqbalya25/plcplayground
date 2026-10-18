@@ -2,13 +2,20 @@ const plc = require("../modbus-client");
 
 /* ---------- static panel pinout (mirrors src/lib/wiring/config/panel.ts) -
    Duplicated on purpose — hardware pin numbering, not evaluation logic. */
+// const BUTTON_CONTACTS = {
+//   PB1: ["3", "4"],
+//   PB2: ["3", "4"],
+//   PB3: ["3", "4"],
+//   PB4: ["1", "2"],
+// };
+// const BUTTON_TYPES = { PB1: "NO", PB2: "NO", PB3: "NO", PB4: "NC" };
+
 const BUTTON_CONTACTS = {
   PB1: ["3", "4"],
   PB2: ["3", "4"],
-  PB3: ["3", "4"],
-  PB4: ["1", "2"],
+  PB3: ["1", "2"],
 };
-const BUTTON_TYPES = { PB1: "NO", PB2: "NO", PB3: "NO", PB4: "NC" };
+const BUTTON_TYPES = { PB1: "NO", PB2: "NO", PB3: "NC" };
 
 /* ---------- L & N: single relay ------------------------------------------ */
 const LN_REQUIREMENTS = [
@@ -18,8 +25,11 @@ const LN_REQUIREMENTS = [
 const MAIN_POWER_COIL = 3072; // M0
 
 const SS_COIL = 3122; // M50 — S/S wired to 24V
-const WIRING_COILS = { X0: 3073, X1: 3074, X6: 3075, X7: 3076 }; // M1-M4 — wiring correctness
-const PRESS_COILS = { X0: 3123, X1: 3124, X6: 3125, X7: 3126 }; // M51-M54 — simulated press
+// const WIRING_COILS = { X0: 3073, X1: 3074, X6: 3075, X7: 3076 }; // M1-M4 — wiring correctness
+// const PRESS_COILS = { X0: 3123, X1: 3124, X6: 3125, X7: 3126 }; // M51-M54 — simulated press
+
+const WIRING_COILS = { X0: 3073, X1: 3074, X6: 3075 }; // M1-M3 — wiring correctness
+const PRESS_COILS = { X0: 3123, X1: 3124, X6: 3125 }; // M51-M53 — simulated press
 
 let poweredOn = false;
 

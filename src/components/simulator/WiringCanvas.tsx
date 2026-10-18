@@ -12,15 +12,24 @@ import {
 import { CABLE_COLORS } from "@/lib/wiring/hooks/use-wiring";
 import type { WiringApi } from "@/lib/wiring/hooks/use-wiring";
 
+// const STATIC_ADDRESS: Record<string, string> = {
+//   PB1: "X0",
+//   PB2: "X1",
+//   PB3: "X6",
+//   PB4: "X7",
+//   LAMP1: "Y0",
+//   LAMP2: "Y1",
+//   LAMP3: "Y4",
+//   LAMP4: "Y5",
+// };
+
 const STATIC_ADDRESS: Record<string, string> = {
   PB1: "X0",
   PB2: "X1",
   PB3: "X6",
-  PB4: "X7",
   LAMP1: "Y0",
   LAMP2: "Y1",
-  LAMP3: "Y4",
-  LAMP4: "Y5",
+  LAMP3: "Y2",
 };
 
 /* ---------- geometry helpers ---------- */
