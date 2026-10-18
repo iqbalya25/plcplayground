@@ -77,7 +77,7 @@ export function CameraPanel() {
     <aside className="flex w-[40%] min-w-[360px] flex-col gap-2 border-l-2 border-panel-border bg-panel-muted p-3">
       <div className="flex items-center justify-between">
         <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-ink">
-          {lang === "en" ? "Live camera" : "Kamera langsung"}
+          {lang === "en" ? "Live Trainer View" : "Tampilan Trainer Live"}
         </span>
         <span
           className={cn(
@@ -86,7 +86,7 @@ export function CameraPanel() {
           )}
         >
           <span className="h-1.5 w-1.5 rounded-full bg-current" />
-          {live ? TEXT.live[lang] : TEXT[state][lang]}
+          {live ? "Online" : "Offline"}
         </span>
       </div>
 
@@ -98,7 +98,11 @@ export function CameraPanel() {
             if (el) imgNode.current = el;
           }}
           src={`${STREAM_URL}?t=${attempt}`}
-          alt={lang === "en" ? "Live view of the PLC panel" : "Tampilan langsung panel PLC"}
+          alt={
+            lang === "en"
+              ? "Live view of the PLC panel"
+              : "Tampilan langsung panel PLC"
+          }
           className="h-full w-full object-contain"
           onError={() => setTimeout(() => setAttempt((a) => a + 1), 3000)}
         />
