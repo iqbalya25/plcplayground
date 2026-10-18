@@ -131,6 +131,18 @@ export function SimulatorShell() {
   const [badWireIds, setBadWireIds] = React.useState<ReadonlySet<string>>(
     new Set(),
   );
+  const skipClearRef = React.useRef(false);
+  React.useEffect(() => {
+    if (skipClearRef.current) {
+      skipClearRef.current = false;
+      return;
+    }
+    setHintMessages([
+      { kind: "dim", text: translateMessage("initial-hint", lang) },
+    ]);
+    setMissTerminals(new Set());
+    setBadWireIds(new Set());
+  }, [api.wires, lang]);
 
   /* ---------- PLC sync: push wiring + button state, only while powered on ---------- */
   React.useEffect(() => {
@@ -189,7 +201,15 @@ export function SimulatorShell() {
       powerOff().catch(() => {});
       return;
     }
-
+    const acReady = ["ac-plc-l", "ac-plc-n", "ac-psu-l", "ac-psu-n"].every(
+      (id) => evaluation.tasks.find((t) => t.id === id)?.done,
+    );
+    if (!acReady) {
+      setHintMessages([
+        { kind: "err", text: translateMessage("need-ac-power", lang) },
+      ]);
+      return;
+    }
     const hasDanger = evaluation.dangers.length > 0;
     const result = await powerOn(
       api.wires.map((w) => ({ from: w.from, to: w.to })),
@@ -199,6 +219,9 @@ export function SimulatorShell() {
 
     if (result?.ok) {
       setPoweredOn(true);
+      setHintMessages([
+        { kind: "dim", text: translateMessage("initial-hint", lang) },
+      ]);
     } else {
       setHintMessages([
         {
@@ -254,6 +277,7 @@ export function SimulatorShell() {
   };
 
   const resetAll = () => {
+    if (api.wires.length > 0) skipClearRef.current = true;
     api.reset();
     setPoweredOn(false);
     resetPlc().catch(() => {});

@@ -21,6 +21,8 @@ const BUTTON_TYPES = { PB1: "NO", PB2: "NO", PB3: "NC" };
 const LN_REQUIREMENTS = [
   { a: "MCB.L1_OUT", b: "PLC.L" },
   { a: "MCB.L2_OUT", b: "PLC.N" },
+  { a: "MCB.L1_OUT", b: "PSU.L_IN" },
+  { a: "MCB.L2_OUT", b: "PSU.N_IN" },
 ];
 const MAIN_POWER_COIL = 3072; // M0
 
@@ -131,6 +133,14 @@ async function powerOn(wires, hasDanger, pressed = []) {
   if (hasDanger) {
     const err = new Error(
       "Cannot power on — dangerous wiring detected (short circuit / cross-voltage).",
+    );
+    err.status = 409;
+    throw err;
+  }
+  const conn = buildConnectivity(wires);
+  if (!LN_REQUIREMENTS.every(({ a, b }) => conn.connected(a, b))) {
+    const err = new Error(
+      "Cannot power on — AC supply must reach both the PLC and the power supply.",
     );
     err.status = 409;
     throw err;
